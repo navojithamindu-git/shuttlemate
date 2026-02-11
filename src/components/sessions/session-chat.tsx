@@ -81,6 +81,15 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
           if (data) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === data.id)) return prev;
+              // Replace optimistic temp message with real one
+              const tempIndex = prev.findIndex(
+                (m) => m.id.startsWith("temp-") && m.content === data.content
+              );
+              if (tempIndex !== -1) {
+                const updated = [...prev];
+                updated[tempIndex] = data;
+                return updated;
+              }
               return [...prev, data];
             });
           }

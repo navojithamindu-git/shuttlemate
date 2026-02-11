@@ -110,6 +110,15 @@ export function ChatWindow({
           if (payload.new.receiver_id === otherUserId) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === payload.new.id)) return prev;
+              // Replace optimistic temp message with real one
+              const tempIndex = prev.findIndex(
+                (m) => m.id.startsWith("temp-") && m.content === payload.new.content
+              );
+              if (tempIndex !== -1) {
+                const updated = [...prev];
+                updated[tempIndex] = payload.new as Message;
+                return updated;
+              }
               return [...prev, payload.new as Message];
             });
           }
