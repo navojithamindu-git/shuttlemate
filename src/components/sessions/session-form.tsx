@@ -1,0 +1,165 @@
+"use client";
+
+import { useState } from "react";
+import { createSession } from "@/lib/actions/sessions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export function SessionForm() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (formData: FormData) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await createSession(formData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setLoading(false);
+    }
+  };
+
+  // Default date to tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const defaultDate = tomorrow.toISOString().split("T")[0];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Session Details</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form action={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="title">Title *</Label>
+            <Input
+              id="title"
+              name="title"
+              placeholder="e.g., Saturday Morning Doubles"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              placeholder="Any details about the session..."
+              rows={3}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="date">Date *</Label>
+              <Input
+                id="date"
+                name="date"
+                type="date"
+                defaultValue={defaultDate}
+                min={new Date().toISOString().split("T")[0]}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="time">Time *</Label>
+              <Input
+                id="time"
+                name="time"
+                type="time"
+                defaultValue="09:00"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="location">Venue / Location *</Label>
+              <Input
+                id="location"
+                name="location"
+                placeholder="e.g., City Sports Complex"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="city">City *</Label>
+              <Input
+                id="city"
+                name="city"
+                placeholder="e.g., Colombo"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="skill_level">Skill Level</Label>
+              <Select name="skill_level" defaultValue="Open">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Beginner">Beginner</SelectItem>
+                  <SelectItem value="Intermediate">Intermediate</SelectItem>
+                  <SelectItem value="Advanced">Advanced</SelectItem>
+                  <SelectItem value="Open">Open / Any</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="game_type">Game Type</Label>
+              <Select name="game_type" defaultValue="Either">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Singles">Singles</SelectItem>
+                  <SelectItem value="Doubles">Doubles</SelectItem>
+                  <SelectItem value="Either">Either</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="max_players">Max Players</Label>
+              <Input
+                id="max_players"
+                name="max_players"
+                type="number"
+                min={2}
+                max={20}
+                defaultValue={4}
+                required
+              />
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Creating..." : "Create Session"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
