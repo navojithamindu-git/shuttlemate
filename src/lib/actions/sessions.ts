@@ -40,6 +40,26 @@ export async function createSession(formData: FormData) {
     user_id: user.id,
   });
 
+  // Notify players whose availability matches this session
+  try {
+    const { notifyMatchingPlayers } = await import(
+      "@/lib/actions/notifications"
+    );
+    await notifyMatchingPlayers({
+      id: data.id,
+      creator_id: user.id,
+      title: sessionData.title,
+      date: sessionData.date,
+      time: sessionData.time,
+      location: sessionData.location,
+      city: sessionData.city,
+      skill_level: sessionData.skill_level,
+      game_type: sessionData.game_type,
+    });
+  } catch (err) {
+    console.error("Failed to send availability notifications:", err);
+  }
+
   revalidatePath("/sessions");
   redirect(`/sessions/${data.id}`);
 }
