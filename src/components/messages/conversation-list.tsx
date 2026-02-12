@@ -115,6 +115,23 @@ export function ConversationList({
     };
   }, [currentUserId]);
 
+  // Polling fallback + visibility refetch (ensures list updates even if realtime fails)
+  useEffect(() => {
+    const pollInterval = setInterval(fetchConversations, 5000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchConversations();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [currentUserId]);
+
   const getInitials = (name: string) =>
     name
       .split(" ")

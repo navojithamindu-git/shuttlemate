@@ -68,46 +68,55 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
   const editInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const fetchMessages = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("session_messages")
+      .select("*, profiles(full_name, avatar_url)")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    if (data) {
+      setMessages((prev) => {
+        // Preserve optimistic (temp) messages during polling
+        const temps = prev.filter((m) => m.id.startsWith("temp-"));
+        const remainingTemps = temps.filter(
+          (t) =>
+            !data.some(
+              (d) => d.content === t.content && d.user_id === t.user_id
+            )
+        );
+        return [...data, ...remainingTemps];
+      });
+
+      if (data.length > 0) {
+        const messageIds = data.map((m) => m.id);
+        const { data: reactionsData } = await supabase
+          .from("message_reactions")
+          .select("*")
+          .in("session_message_id", messageIds);
+
+        if (reactionsData) {
+          const grouped: Record<string, Reaction[]> = {};
+          reactionsData.forEach((r: Reaction) => {
+            const key = r.session_message_id!;
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(r);
+          });
+          setReactions(grouped);
+        }
+      }
+    }
+  }, [sessionId]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Fetch initial messages and reactions
+  // Initial fetch
   useEffect(() => {
-    const supabase = createClient();
-
-    async function fetchMessages() {
-      const { data } = await supabase
-        .from("session_messages")
-        .select("*, profiles(full_name, avatar_url)")
-        .eq("session_id", sessionId)
-        .order("created_at", { ascending: true });
-
-      if (data) {
-        setMessages(data);
-
-        if (data.length > 0) {
-          const messageIds = data.map((m) => m.id);
-          const { data: reactionsData } = await supabase
-            .from("message_reactions")
-            .select("*")
-            .in("session_message_id", messageIds);
-
-          if (reactionsData) {
-            const grouped: Record<string, Reaction[]> = {};
-            reactionsData.forEach((r: Reaction) => {
-              const key = r.session_message_id!;
-              if (!grouped[key]) grouped[key] = [];
-              grouped[key].push(r);
-            });
-            setReactions(grouped);
-          }
-        }
-      }
-    }
-
     fetchMessages();
-  }, [sessionId]);
+  }, [fetchMessages]);
 
   // Subscribe to realtime messages
   useEffect(() => {
@@ -214,6 +223,23 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
       supabase.removeChannel(channel);
     };
   }, [sessionId]);
+
+  // Polling fallback + visibility refetch (ensures messages update even if realtime fails)
+  useEffect(() => {
+    const pollInterval = setInterval(fetchMessages, 5000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchMessages();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchMessages]);
 
   useEffect(() => {
     scrollToBottom();

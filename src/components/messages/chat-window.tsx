@@ -75,27 +75,30 @@ export function ChatWindow({
   const editInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  // Fetch messages and reactions
-  useEffect(() => {
+  const fetchMessages = useCallback(async () => {
     const supabase = createClient();
+    const { data } = await supabase
+      .from("direct_messages")
+      .select("*")
+      .or(
+        `and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
+      )
+      .order("created_at", { ascending: true });
 
-    async function fetchMessages() {
-      const { data } = await supabase
-        .from("direct_messages")
-        .select("*")
-        .or(
-          `and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
-        )
-        .order("created_at", { ascending: true });
+    if (data) {
+      setMessages((prev) => {
+        // Preserve optimistic (temp) messages during polling
+        const temps = prev.filter((m) => m.id.startsWith("temp-"));
+        const remainingTemps = temps.filter(
+          (t) =>
+            !data.some(
+              (d) => d.content === t.content && d.sender_id === t.sender_id
+            )
+        );
+        return [...data, ...remainingTemps];
+      });
 
-      if (data) setMessages(data);
-      setLoading(false);
-
-      if (data && data.length > 0) {
+      if (data.length > 0) {
         const messageIds = data.map((m) => m.id);
         const { data: reactionsData } = await supabase
           .from("message_reactions")
@@ -113,10 +116,17 @@ export function ChatWindow({
         }
       }
     }
-
-    fetchMessages();
-    markDirectMessagesAsRead(otherUserId).catch(() => {});
   }, [currentUserId, otherUserId]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    fetchMessages().then(() => setLoading(false));
+    markDirectMessagesAsRead(otherUserId).catch(() => {});
+  }, [fetchMessages, otherUserId]);
 
   // Realtime subscription
   useEffect(() => {
@@ -230,6 +240,23 @@ export function ChatWindow({
       supabase.removeChannel(channel);
     };
   }, [currentUserId, otherUserId]);
+
+  // Polling fallback + visibility refetch (ensures messages update even if realtime fails)
+  useEffect(() => {
+    const pollInterval = setInterval(fetchMessages, 5000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchMessages();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchMessages]);
 
   // Auto-scroll
   useEffect(() => {
