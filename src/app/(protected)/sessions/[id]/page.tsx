@@ -9,7 +9,7 @@ import { ParticipantList } from "@/components/sessions/participant-list";
 import { CancelSessionButton } from "@/components/sessions/cancel-session-button";
 import { SessionChat } from "@/components/sessions/session-chat";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 
 export default async function SessionDetailPage({
   params,
@@ -55,6 +55,20 @@ export default async function SessionDetailPage({
     .join("")
     .toUpperCase();
 
+  // Timing badge
+  const sessionDateTime = new Date(session.date + "T" + session.time);
+  const now = new Date();
+  const daysUntil = differenceInCalendarDays(sessionDateTime, now);
+  const timingBadge = sessionDateTime < now
+    ? { label: "Expired", variant: "destructive" as const }
+    : daysUntil === 0
+      ? { label: "Today", variant: "default" as const }
+      : daysUntil === 1
+        ? { label: "Tomorrow", variant: "default" as const }
+        : daysUntil <= 7
+          ? { label: `In ${daysUntil} days`, variant: "secondary" as const }
+          : null;
+
   return (
     <div className="container max-w-3xl mx-auto py-8 px-4">
       <div className="flex flex-col gap-6">
@@ -63,6 +77,9 @@ export default async function SessionDetailPage({
           <div className="flex gap-2 mb-3 flex-wrap">
             <Badge variant="secondary">{session.skill_level}</Badge>
             <Badge variant="outline">{session.game_type}</Badge>
+            {timingBadge && (
+              <Badge variant={timingBadge.variant}>{timingBadge.label}</Badge>
+            )}
             {session.status === "full" && (
               <Badge variant="destructive">Full</Badge>
             )}
@@ -177,7 +194,7 @@ export default async function SessionDetailPage({
           </CardContent>
         </Card>
 
-        {/* Session Chat - only for active participants */}
+        {/* Session Chat - only for upcoming sessions */}
         {(isJoined || isCreator) && user && session.status !== "cancelled" && session.status !== "completed" && (
           <SessionChat sessionId={session.id} currentUserId={user.id} />
         )}

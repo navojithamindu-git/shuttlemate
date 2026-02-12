@@ -48,6 +48,131 @@ export async function sendDirectMessage(receiverId: string, content: string) {
   revalidatePath(`/messages/${receiverId}`);
 }
 
+export async function editDirectMessage(messageId: string, newContent: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const trimmed = newContent.trim();
+  if (!trimmed) throw new Error("Message cannot be empty");
+
+  const { error } = await supabase
+    .from("direct_messages")
+    .update({ content: trimmed, is_edited: true })
+    .eq("id", messageId)
+    .eq("sender_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/messages");
+}
+
+export async function deleteDirectMessage(messageId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("direct_messages")
+    .update({ content: "", is_deleted: true })
+    .eq("id", messageId)
+    .eq("sender_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/messages");
+}
+
+export async function editSessionMessage(
+  messageId: string,
+  newContent: string
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const trimmed = newContent.trim();
+  if (!trimmed) throw new Error("Message cannot be empty");
+
+  const { error } = await supabase
+    .from("session_messages")
+    .update({ content: trimmed, is_edited: true })
+    .eq("id", messageId)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteSessionMessage(messageId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("session_messages")
+    .update({ content: "", is_deleted: true })
+    .eq("id", messageId)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function toggleReaction(
+  messageType: "direct" | "session",
+  messageId: string,
+  emoji: string
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const column =
+    messageType === "direct" ? "direct_message_id" : "session_message_id";
+
+  // Check if reaction already exists
+  const { data: existing } = await supabase
+    .from("message_reactions")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("emoji", emoji)
+    .eq(column, messageId)
+    .maybeSingle();
+
+  if (existing) {
+    // Remove reaction
+    const { error } = await supabase
+      .from("message_reactions")
+      .delete()
+      .eq("id", existing.id);
+
+    if (error) throw new Error(error.message);
+  } else {
+    // Add reaction
+    const { error } = await supabase.from("message_reactions").insert({
+      user_id: user.id,
+      emoji,
+      [column]: messageId,
+    });
+
+    if (error) throw new Error(error.message);
+  }
+}
+
 export async function markDirectMessagesAsRead(senderId: string) {
   const supabase = await createClient();
   const {
