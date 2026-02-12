@@ -67,3 +67,23 @@ export interface SessionWithParticipants extends SessionWithCreator {
     profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
   })[];
 }
+
+export interface AvailabilitySpecific {
+  id: string;
+  user_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  city: string;
+  created_at: string;
+}
+
+export interface AvailabilityRecurring {
+  id: string;
+  user_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  city: string;
+  created_at: string;
+}

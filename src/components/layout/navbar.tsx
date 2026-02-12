@@ -21,7 +21,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { Menu, LogOut, User, Calendar, Plus, MessageCircle, Sun, Moon } from "lucide-react";
+import { Menu, LogOut, User, Calendar, Plus, MessageCircle, Clock, Sun, Moon } from "lucide-react";
 
 interface NavbarProps {
   userName: string | null;
@@ -53,6 +53,7 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0 }: NavbarPr
     { href: "/sessions", label: "Find Sessions", icon: Calendar },
     { href: "/sessions/new", label: "Create Session", icon: Plus },
     { href: "/my-sessions", label: "My Sessions", icon: Calendar },
+    { href: "/availability", label: "Availability", icon: Clock },
     { href: "/messages", label: "Messages", icon: MessageCircle },
   ];
 
