@@ -22,6 +22,8 @@ export interface SessionMessage {
   session_id: string;
   user_id: string;
   content: string;
+  is_edited: boolean;
+  is_deleted: boolean;
   created_at: string;
 }
 
@@ -31,6 +33,17 @@ export interface DirectMessage {
   receiver_id: string;
   content: string;
   read: boolean;
+  is_edited: boolean;
+  is_deleted: boolean;
+  created_at: string;
+}
+
+export interface MessageReaction {
+  id: string;
+  user_id: string;
+  emoji: string;
+  direct_message_id: string | null;
+  session_message_id: string | null;
   created_at: string;
 }
 
