@@ -41,6 +41,7 @@ function getTimingBadge(date: string, time: string) {
 export function SessionCard({ session }: SessionCardProps) {
   const participantCount = session.session_participants?.[0]?.count ?? 0;
   const timing = getTimingBadge(session.date, session.time);
+  const isFull = session.status === "full" || participantCount >= session.max_players;
 
   return (
     <Link href={`/sessions/${session.id}`}>
@@ -52,7 +53,7 @@ export function SessionCard({ session }: SessionCardProps) {
             {timing && (
               <Badge variant={timing.variant}>{timing.label}</Badge>
             )}
-            {session.status === "full" && (
+            {isFull && session.status !== "completed" && session.status !== "cancelled" && (
               <Badge variant="destructive">Full</Badge>
             )}
             {session.status === "completed" && (
