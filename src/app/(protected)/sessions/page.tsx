@@ -21,7 +21,11 @@ export default async function SessionsPage({
 
   // Clean up expired sessions and unconfirmed participants before fetching
   await cleanupExpiredSessions();
-  await cleanupUnconfirmedParticipants();
+  try {
+    await cleanupUnconfirmedParticipants();
+  } catch (err) {
+    console.error("Failed to cleanup unconfirmed participants:", err);
+  }
 
   const supabase = await createClient();
 
