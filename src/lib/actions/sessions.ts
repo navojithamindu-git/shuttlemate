@@ -319,24 +319,7 @@ export async function editSession(
     deadline = sessionDateTime;
   }
 
-  // Reset confirmed=false for all participants except creator
-  // Use admin client to bypass RLS for updating other users' rows
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const admin = createAdminClient();
-    await admin
-      .from("session_participants")
-      .update({
-        confirmed: false,
-        confirmation_deadline: deadline.toISOString(),
-      })
-      .eq("session_id", sessionId)
-      .neq("user_id", user.id);
-  } catch (err) {
-    console.error("Failed to reset participant confirmation:", err);
-  }
-
-  // Send notifications (email + system chat message)
+  // Reset confirmation + send notifications (both use admin client)
   try {
     const { notifySessionEdited } = await import(
       "@/lib/actions/notifications"

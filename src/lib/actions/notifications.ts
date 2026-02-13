@@ -161,6 +161,16 @@ export async function notifySessionEdited(data: SessionEditData) {
   const admin = createAdminClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+  // Reset confirmed=false for all participants except creator
+  await admin
+    .from("session_participants")
+    .update({
+      confirmed: false,
+      confirmation_deadline: data.deadline,
+    })
+    .eq("session_id", data.sessionId)
+    .neq("user_id", data.creatorId);
+
   // Get all participants except creator
   const { data: participants } = await admin
     .from("session_participants")
