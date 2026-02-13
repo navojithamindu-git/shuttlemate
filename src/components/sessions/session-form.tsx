@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CityCombobox } from "@/components/ui/city-combobox";
 import type { SessionFormData } from "@/lib/types/database";
 
 interface SessionFormProps {
@@ -89,25 +90,36 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="date">Date *</Label>
+            <Input
+              id="date"
+              name="date"
+              type="date"
+              defaultValue={defaultDate}
+              min={new Date().toISOString().split("T")[0]}
+              required
+            />
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="date">Date *</Label>
+              <Label htmlFor="start_time">Start Time *</Label>
               <Input
-                id="date"
-                name="date"
-                type="date"
-                defaultValue={defaultDate}
-                min={new Date().toISOString().split("T")[0]}
+                id="start_time"
+                name="start_time"
+                type="time"
+                defaultValue={initialData?.start_time?.slice(0, 5) ?? "09:00"}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="time">Time *</Label>
+              <Label htmlFor="end_time">End Time *</Label>
               <Input
-                id="time"
-                name="time"
+                id="end_time"
+                name="end_time"
                 type="time"
-                defaultValue={initialData?.time?.slice(0, 5) ?? "09:00"}
+                defaultValue={initialData?.end_time?.slice(0, 5) ?? "11:00"}
                 required
               />
             </div>
@@ -125,12 +137,11 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="city">City *</Label>
-              <Input
-                id="city"
+              <Label>City *</Label>
+              <CityCombobox
                 name="city"
-                placeholder="e.g., Colombo"
                 defaultValue={initialData?.city ?? ""}
+                placeholder="Select city..."
                 required
               />
             </div>

@@ -19,7 +19,8 @@ export async function createSession(formData: FormData) {
     title: formData.get("title") as string,
     description: (formData.get("description") as string) || null,
     date: formData.get("date") as string,
-    time: formData.get("time") as string,
+    start_time: formData.get("start_time") as string,
+    end_time: formData.get("end_time") as string,
     location: formData.get("location") as string,
     city: formData.get("city") as string,
     skill_level: formData.get("skill_level") as SkillLevel,
@@ -52,7 +53,8 @@ export async function createSession(formData: FormData) {
         creator_id: user.id,
         title: sessionData.title,
         date: sessionData.date,
-        time: sessionData.time,
+        start_time: sessionData.start_time,
+        end_time: sessionData.end_time,
         location: sessionData.location,
         city: sessionData.city,
         skill_level: sessionData.skill_level,
@@ -100,7 +102,7 @@ export async function joinSession(sessionId: string) {
   // Check capacity and session status
   const { data: session } = await supabase
     .from("sessions")
-    .select("max_players, date, status")
+    .select("max_players, date, start_time, status")
     .eq("id", sessionId)
     .single();
 
@@ -188,7 +190,7 @@ export async function cancelSession(sessionId: string) {
   // Fetch session details and participants before cancelling
   const { data: session } = await supabase
     .from("sessions")
-    .select("title, date, time, location, city, creator_id")
+    .select("title, date, start_time, end_time, location, city, creator_id")
     .eq("id", sessionId)
     .eq("creator_id", user.id)
     .single();
@@ -213,7 +215,8 @@ export async function cancelSession(sessionId: string) {
         sessionId,
         title: session.title,
         date: session.date,
-        time: session.time,
+        start_time: session.start_time,
+        end_time: session.end_time,
         location: session.location,
         city: session.city,
         creatorId: user.id,
@@ -257,7 +260,8 @@ export async function editSession(
     title: formData.get("title") as string,
     description: (formData.get("description") as string) || null,
     date: formData.get("date") as string,
-    time: formData.get("time") as string,
+    start_time: formData.get("start_time") as string,
+    end_time: formData.get("end_time") as string,
     location: formData.get("location") as string,
     city: formData.get("city") as string,
     skill_level: formData.get("skill_level") as SkillLevel,
@@ -270,7 +274,8 @@ export async function editSession(
   if (session.title !== newData.title) changes.push(`Title: "${newData.title}"`);
   if (session.description !== newData.description) changes.push("Description updated");
   if (session.date !== newData.date) changes.push(`Date: ${newData.date}`);
-  if (session.time.slice(0, 5) !== newData.time.slice(0, 5)) changes.push(`Time: ${newData.time}`);
+  if (session.start_time.slice(0, 5) !== newData.start_time.slice(0, 5)) changes.push(`Start Time: ${newData.start_time}`);
+  if (session.end_time.slice(0, 5) !== newData.end_time.slice(0, 5)) changes.push(`End Time: ${newData.end_time}`);
   if (session.location !== newData.location) changes.push(`Location: ${newData.location}`);
   if (session.city !== newData.city) changes.push(`City: ${newData.city}`);
   if (session.skill_level !== newData.skill_level) changes.push(`Skill Level: ${newData.skill_level}`);
@@ -303,7 +308,7 @@ export async function editSession(
   if (error) return { success: false, error: error.message };
 
   // Calculate dynamic confirmation deadline
-  const sessionDateTime = new Date(newData.date + "T" + newData.time);
+  const sessionDateTime = new Date(newData.date + "T" + newData.start_time);
   const now = new Date();
   const hoursUntilSession = (sessionDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
@@ -335,7 +340,8 @@ export async function editSession(
         sessionId,
         title: newData.title,
         date: newData.date,
-        time: newData.time,
+        start_time: newData.start_time,
+        end_time: newData.end_time,
         location: newData.location,
         city: newData.city,
         changes,

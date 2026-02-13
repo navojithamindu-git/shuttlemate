@@ -6,7 +6,8 @@ interface SessionEditData {
   sessionId: string;
   title: string;
   date: string;
-  time: string;
+  start_time: string;
+  end_time: string;
   location: string;
   city: string;
   changes: string[];
@@ -18,7 +19,8 @@ interface SessionCancelData {
   sessionId: string;
   title: string;
   date: string;
-  time: string;
+  start_time: string;
+  end_time: string;
   location: string;
   city: string;
   creatorId: string;
@@ -29,7 +31,8 @@ interface SessionData {
   creator_id: string;
   title: string;
   date: string;
-  time: string;
+  start_time: string;
+  end_time: string;
   location: string;
   city: string;
   skill_level: string;
@@ -50,18 +53,18 @@ export async function notifyMatchingPlayers(session: SessionData) {
     .select("user_id")
     .eq("date", session.date)
     .ilike("city", `%${session.city}%`)
-    .lte("start_time", session.time)
-    .gte("end_time", session.time)
+    .lte("start_time", session.end_time)
+    .gte("end_time", session.start_time)
     .neq("user_id", session.creator_id);
 
-  // Find users with recurring availability matching this session
+  // Find users with recurring availability overlapping this session's time range
   const { data: recurringMatches } = await admin
     .from("availability_recurring")
     .select("user_id")
     .eq("day_of_week", dayOfWeek)
     .ilike("city", `%${session.city}%`)
-    .lte("start_time", session.time)
-    .gte("end_time", session.time)
+    .lte("start_time", session.end_time)
+    .gte("end_time", session.start_time)
     .neq("user_id", session.creator_id);
 
   // Deduplicate user IDs
@@ -131,7 +134,7 @@ export async function notifyMatchingPlayers(session: SessionData) {
             <div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
               <h3 style="margin: 0 0 12px 0; color: #1a1a1a;">${session.title}</h3>
               <p style="margin: 4px 0; color: #374151; font-size: 14px;">Date: ${formattedDate}</p>
-              <p style="margin: 4px 0; color: #374151; font-size: 14px;">Time: ${session.time.slice(0, 5)}</p>
+              <p style="margin: 4px 0; color: #374151; font-size: 14px;">Time: ${session.start_time.slice(0, 5)} – ${session.end_time.slice(0, 5)}</p>
               <p style="margin: 4px 0; color: #374151; font-size: 14px;">Location: ${session.location}, ${session.city}</p>
               <p style="margin: 4px 0; color: #374151; font-size: 14px;">Level: ${session.skill_level} | Type: ${session.game_type}</p>
             </div>
@@ -315,7 +318,7 @@ export async function notifySessionCancelled(data: SessionCancelData) {
             <div style="background: #fef2f2; border: 1px solid #ef4444; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
               <h3 style="margin: 0 0 12px 0; color: #991b1b;">${data.title}</h3>
               <p style="margin: 4px 0; color: #374151; font-size: 14px;">Date: ${formattedDate}</p>
-              <p style="margin: 4px 0; color: #374151; font-size: 14px;">Time: ${data.time.slice(0, 5)}</p>
+              <p style="margin: 4px 0; color: #374151; font-size: 14px;">Time: ${data.start_time.slice(0, 5)} – ${data.end_time.slice(0, 5)}</p>
               <p style="margin: 4px 0; color: #374151; font-size: 14px;">Location: ${data.location}, ${data.city}</p>
             </div>
             <a href="${sessionsUrl}" style="display: inline-block; background: #18181b; color: #ffffff; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px;">Browse Sessions</a>

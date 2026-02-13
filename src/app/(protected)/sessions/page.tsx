@@ -38,7 +38,7 @@ export default async function SessionsPage({
     .gte("date", new Date().toISOString().split("T")[0])
     .order("date", { ascending: true });
 
-  if (params.city) query = query.ilike("city", `%${params.city}%`);
+  if (params.city) query = query.eq("city", params.city);
   if (params.skill_level) query = query.eq("skill_level", params.skill_level);
   if (params.game_type) query = query.eq("game_type", params.game_type);
 

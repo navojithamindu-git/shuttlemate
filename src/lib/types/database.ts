@@ -54,7 +54,8 @@ export interface Session {
   title: string;
   description: string | null;
   date: string;
-  time: string;
+  start_time: string;
+  end_time: string;
   location: string;
   city: string;
   skill_level: SkillLevel;
@@ -80,7 +81,8 @@ export interface SessionFormData {
   title: string;
   description: string | null;
   date: string;
-  time: string;
+  start_time: string;
+  end_time: string;
   location: string;
   city: string;
   skill_level: SkillLevel;

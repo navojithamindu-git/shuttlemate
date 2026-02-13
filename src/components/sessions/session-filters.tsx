@@ -2,7 +2,6 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CityCombobox } from "@/components/ui/city-combobox";
 import { X } from "lucide-react";
 
 interface SessionFiltersProps {
@@ -47,15 +47,13 @@ export function SessionFilters({ currentFilters }: SessionFiltersProps) {
 
   return (
     <div className="flex flex-col sm:flex-row gap-3">
-      <Input
-        placeholder="Filter by city..."
-        defaultValue={currentFilters.city ?? ""}
-        onChange={(e) => {
-          const timer = setTimeout(() => updateFilter("city", e.target.value), 400);
-          return () => clearTimeout(timer);
-        }}
-        className="sm:max-w-[200px]"
-      />
+      <div className="sm:max-w-[200px]">
+        <CityCombobox
+          value={currentFilters.city ?? ""}
+          onValueChange={(v) => updateFilter("city", v || null)}
+          placeholder="Filter by city..."
+        />
+      </div>
       <Select
         value={currentFilters.skill_level ?? "all"}
         onValueChange={(v) => updateFilter("skill_level", v)}

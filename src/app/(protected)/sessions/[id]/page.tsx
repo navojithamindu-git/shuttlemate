@@ -75,7 +75,7 @@ export default async function SessionDetailPage({
     .toUpperCase();
 
   // Timing badge
-  const sessionDateTime = new Date(session.date + "T" + session.time);
+  const sessionDateTime = new Date(session.date + "T" + session.start_time);
   const now = new Date();
   const daysUntil = differenceInCalendarDays(sessionDateTime, now);
   const timingBadge = sessionDateTime < now
@@ -140,7 +140,7 @@ export default async function SessionDetailPage({
                 <Clock className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <p className="text-sm text-muted-foreground">Time</p>
-                  <p className="font-medium">{session.time.slice(0, 5)}</p>
+                  <p className="font-medium">{session.start_time.slice(0, 5)} – {session.end_time.slice(0, 5)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
