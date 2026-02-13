@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createSession, editSession } from "@/lib/actions/sessions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ interface SessionFormProps {
 export function SessionForm({ mode = "create", initialData }: SessionFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const isEdit = mode === "edit";
 
   const handleSubmit = async (formData: FormData) => {
@@ -31,7 +33,13 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
     setError(null);
     try {
       if (isEdit && initialData) {
-        await editSession(initialData.id, formData);
+        const result = await editSession(initialData.id, formData);
+        if (!result.success) {
+          setError(result.error);
+          setLoading(false);
+          return;
+        }
+        router.push(`/sessions/${initialData.id}`);
       } else {
         await createSession(formData);
       }

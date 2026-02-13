@@ -223,13 +223,16 @@ export async function cancelSession(sessionId: string) {
   revalidatePath("/my-sessions");
 }
 
-export async function editSession(sessionId: string, formData: FormData) {
+export async function editSession(
+  sessionId: string,
+  formData: FormData
+): Promise<{ success: true } | { success: false; error: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) return { success: false, error: "Not authenticated" };
 
   // Fetch current session
   const { data: session } = await supabase
@@ -239,9 +242,9 @@ export async function editSession(sessionId: string, formData: FormData) {
     .eq("creator_id", user.id)
     .single();
 
-  if (!session) throw new Error("Session not found or not authorized");
+  if (!session) return { success: false, error: "Session not found or not authorized" };
   if (session.status === "cancelled" || session.status === "completed") {
-    throw new Error("Cannot edit a cancelled or completed session");
+    return { success: false, error: "Cannot edit a cancelled or completed session" };
   }
 
   // Parse new values
@@ -270,15 +273,16 @@ export async function editSession(sessionId: string, formData: FormData) {
   if (session.max_players !== newData.max_players) changes.push(`Max Players: ${newData.max_players}`);
 
   if (changes.length === 0) {
-    throw new Error("No changes detected");
+    return { success: false, error: "No changes detected" };
   }
 
   // Validate max_players >= current participant count
   const currentCount = session.session_participants?.[0]?.count ?? 0;
   if (newData.max_players < currentCount) {
-    throw new Error(
-      `Cannot reduce max players below current participant count (${currentCount})`
-    );
+    return {
+      success: false,
+      error: `Cannot reduce max players below current participant count (${currentCount})`,
+    };
   }
 
   // Update session
@@ -291,7 +295,7 @@ export async function editSession(sessionId: string, formData: FormData) {
     .eq("id", sessionId)
     .eq("creator_id", user.id);
 
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   // Calculate dynamic confirmation deadline
   const sessionDateTime = new Date(newData.date + "T" + newData.time);
@@ -317,16 +321,20 @@ export async function editSession(sessionId: string, formData: FormData) {
 
   // Reset confirmed=false for all participants except creator
   // Use admin client to bypass RLS for updating other users' rows
-  const { createAdminClient } = await import("@/lib/supabase/admin");
-  const admin = createAdminClient();
-  await admin
-    .from("session_participants")
-    .update({
-      confirmed: false,
-      confirmation_deadline: deadline.toISOString(),
-    })
-    .eq("session_id", sessionId)
-    .neq("user_id", user.id);
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    await admin
+      .from("session_participants")
+      .update({
+        confirmed: false,
+        confirmation_deadline: deadline.toISOString(),
+      })
+      .eq("session_id", sessionId)
+      .neq("user_id", user.id);
+  } catch (err) {
+    console.error("Failed to reset participant confirmation:", err);
+  }
 
   // Send notifications (email + system chat message)
   try {
@@ -351,7 +359,8 @@ export async function editSession(sessionId: string, formData: FormData) {
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath("/sessions");
   revalidatePath("/my-sessions");
-  redirect(`/sessions/${sessionId}`);
+
+  return { success: true };
 }
 
 export async function confirmSession(sessionId: string) {
