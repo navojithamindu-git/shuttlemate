@@ -7,6 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { JoinLeaveButton } from "@/components/sessions/join-leave-button";
 import { ParticipantList } from "@/components/sessions/participant-list";
 import { CancelSessionButton } from "@/components/sessions/cancel-session-button";
+import { EditSessionButton } from "@/components/sessions/edit-session-button";
+import { ConfirmationBanner } from "@/components/sessions/confirmation-banner";
 import { SessionChat } from "@/components/sessions/session-chat";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
@@ -32,6 +34,8 @@ export default async function SessionDetailPage({
       session_participants(
         user_id,
         joined_at,
+        confirmed,
+        confirmation_deadline,
         profiles(id, full_name, avatar_url, skill_level)
       )
     `
@@ -43,10 +47,24 @@ export default async function SessionDetailPage({
 
   const participantCount = session.session_participants?.length ?? 0;
   const isCreator = user?.id === session.creator_id;
-  const isJoined = session.session_participants?.some(
+  const currentParticipant = session.session_participants?.find(
     (p: { user_id: string }) => p.user_id === user?.id
   );
+  const isJoined = !!currentParticipant;
   const isFull = participantCount >= session.max_players;
+
+  // Check if current user needs to confirm
+  const needsConfirmation =
+    currentParticipant &&
+    !isCreator &&
+    currentParticipant.confirmed === false &&
+    currentParticipant.confirmation_deadline;
+
+  // Check if any participant is unconfirmed (for creator view)
+  const hasAnyUnconfirmed = session.session_participants?.some(
+    (p: { user_id: string; confirmed: boolean }) =>
+      p.user_id !== session.creator_id && p.confirmed === false
+  );
 
   const creatorName = session.creator?.full_name ?? "Unknown";
   const creatorInitials = creatorName
@@ -95,6 +113,14 @@ export default async function SessionDetailPage({
             <p className="text-muted-foreground mt-2">{session.description}</p>
           )}
         </div>
+
+        {/* Confirmation Banner */}
+        {needsConfirmation && session.status !== "cancelled" && session.status !== "completed" && (
+          <ConfirmationBanner
+            sessionId={session.id}
+            confirmationDeadline={currentParticipant.confirmation_deadline}
+          />
+        )}
 
         {/* Details Card */}
         <Card>
@@ -164,7 +190,10 @@ export default async function SessionDetailPage({
                   isFull={isFull}
                 />
                 {isCreator && (
-                  <CancelSessionButton sessionId={session.id} />
+                  <>
+                    <EditSessionButton sessionId={session.id} />
+                    <CancelSessionButton sessionId={session.id} />
+                  </>
                 )}
               </div>
             )}
@@ -185,6 +214,7 @@ export default async function SessionDetailPage({
                 participants={session.session_participants}
                 creatorId={session.creator_id}
                 currentUserId={user?.id}
+                showConfirmationStatus={isCreator && hasAnyUnconfirmed}
               />
             ) : (
               <p className="text-sm text-muted-foreground">

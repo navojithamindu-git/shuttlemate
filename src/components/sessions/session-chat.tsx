@@ -41,6 +41,7 @@ interface Message {
   content: string;
   is_edited?: boolean;
   is_deleted?: boolean;
+  is_system_message?: boolean;
   created_at: string;
   profiles?: {
     full_name: string | null;
@@ -460,6 +461,24 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
             </p>
           )}
           {messages.map((msg) => {
+            // System messages render differently
+            if (msg.is_system_message) {
+              return (
+                <div key={msg.id} className="flex justify-center my-2">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 max-w-[85%] text-center">
+                    <p className="text-xs text-amber-800 whitespace-pre-line">
+                      {msg.content}
+                    </p>
+                    <p className="text-[10px] text-amber-600 mt-1">
+                      {formatDistanceToNow(new Date(msg.created_at), {
+                        addSuffix: true,
+                      })}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+
             const isOwn = msg.user_id === currentUserId;
             const name = msg.profiles?.full_name ?? "Unknown";
             const isEditing = editingId === msg.id;

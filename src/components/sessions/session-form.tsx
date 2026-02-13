@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createSession } from "@/lib/actions/sessions";
+import { createSession, editSession } from "@/lib/actions/sessions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,31 +14,42 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { SessionFormData } from "@/lib/types/database";
 
-export function SessionForm() {
+interface SessionFormProps {
+  mode?: "create" | "edit";
+  initialData?: SessionFormData;
+}
+
+export function SessionForm({ mode = "create", initialData }: SessionFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isEdit = mode === "edit";
 
   const handleSubmit = async (formData: FormData) => {
     setLoading(true);
     setError(null);
     try {
-      await createSession(formData);
+      if (isEdit && initialData) {
+        await editSession(initialData.id, formData);
+      } else {
+        await createSession(formData);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
     }
   };
 
-  // Default date to tomorrow
+  // Default date to tomorrow (for create mode)
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const defaultDate = tomorrow.toISOString().split("T")[0];
+  const defaultDate = initialData?.date ?? tomorrow.toISOString().split("T")[0];
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Session Details</CardTitle>
+        <CardTitle>{isEdit ? "Edit Session" : "Session Details"}</CardTitle>
       </CardHeader>
       <CardContent>
         <form action={handleSubmit} className="space-y-6">
@@ -54,6 +65,7 @@ export function SessionForm() {
               id="title"
               name="title"
               placeholder="e.g., Saturday Morning Doubles"
+              defaultValue={initialData?.title ?? ""}
               required
             />
           </div>
@@ -64,6 +76,7 @@ export function SessionForm() {
               id="description"
               name="description"
               placeholder="Any details about the session..."
+              defaultValue={initialData?.description ?? ""}
               rows={3}
             />
           </div>
@@ -86,7 +99,7 @@ export function SessionForm() {
                 id="time"
                 name="time"
                 type="time"
-                defaultValue="09:00"
+                defaultValue={initialData?.time?.slice(0, 5) ?? "09:00"}
                 required
               />
             </div>
@@ -99,6 +112,7 @@ export function SessionForm() {
                 id="location"
                 name="location"
                 placeholder="e.g., City Sports Complex"
+                defaultValue={initialData?.location ?? ""}
                 required
               />
             </div>
@@ -108,6 +122,7 @@ export function SessionForm() {
                 id="city"
                 name="city"
                 placeholder="e.g., Colombo"
+                defaultValue={initialData?.city ?? ""}
                 required
               />
             </div>
@@ -116,7 +131,7 @@ export function SessionForm() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="skill_level">Skill Level</Label>
-              <Select name="skill_level" defaultValue="Open">
+              <Select name="skill_level" defaultValue={initialData?.skill_level ?? "Open"}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -130,7 +145,7 @@ export function SessionForm() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="game_type">Game Type</Label>
-              <Select name="game_type" defaultValue="Either">
+              <Select name="game_type" defaultValue={initialData?.game_type ?? "Either"}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -149,14 +164,20 @@ export function SessionForm() {
                 type="number"
                 min={2}
                 max={20}
-                defaultValue={4}
+                defaultValue={initialData?.max_players ?? 4}
                 required
               />
             </div>
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating..." : "Create Session"}
+            {loading
+              ? isEdit
+                ? "Saving..."
+                : "Creating..."
+              : isEdit
+                ? "Save Changes"
+                : "Create Session"}
           </Button>
         </form>
       </CardContent>
