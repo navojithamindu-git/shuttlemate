@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { cleanupExpiredSessions } from "@/lib/actions/sessions";
+import { cleanupExpiredSessions, cleanupUnconfirmedParticipants } from "@/lib/actions/sessions";
 import { SessionCard } from "@/components/sessions/session-card";
 import { SessionFilters } from "@/components/sessions/session-filters";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,9 @@ export default async function SessionsPage({
 }) {
   const params = await searchParams;
 
-  // Clean up expired sessions before fetching
+  // Clean up expired sessions and unconfirmed participants before fetching
   await cleanupExpiredSessions();
+  await cleanupUnconfirmedParticipants();
 
   const supabase = await createClient();
 

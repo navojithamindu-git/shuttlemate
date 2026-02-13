@@ -24,6 +24,7 @@ export interface SessionMessage {
   content: string;
   is_edited: boolean;
   is_deleted: boolean;
+  is_system_message: boolean;
   created_at: string;
 }
 
@@ -60,6 +61,7 @@ export interface Session {
   game_type: GameType;
   max_players: number;
   status: SessionStatus;
+  last_edited_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,7 +70,22 @@ export interface SessionParticipant {
   id: string;
   session_id: string;
   user_id: string;
+  confirmed: boolean;
+  confirmation_deadline: string | null;
   joined_at: string;
+}
+
+export interface SessionFormData {
+  id: string;
+  title: string;
+  description: string | null;
+  date: string;
+  time: string;
+  location: string;
+  city: string;
+  skill_level: SkillLevel;
+  game_type: GameType;
+  max_players: number;
 }
 
 export interface SessionWithCreator extends Session {

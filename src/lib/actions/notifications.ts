@@ -2,6 +2,28 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resend } from "@/lib/email/resend";
 import { format } from "date-fns";
 
+interface SessionEditData {
+  sessionId: string;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  city: string;
+  changes: string[];
+  deadline: string;
+  creatorId: string;
+}
+
+interface SessionCancelData {
+  sessionId: string;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  city: string;
+  creatorId: string;
+}
+
 interface SessionData {
   id: string;
   creator_id: string;
@@ -132,5 +154,170 @@ export async function notifyMatchingPlayers(session: SessionData) {
   // Log successful notifications
   if (notificationInserts.length > 0) {
     await admin.from("notification_log").insert(notificationInserts);
+  }
+}
+
+export async function notifySessionEdited(data: SessionEditData) {
+  const admin = createAdminClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+  // Get all participants except creator
+  const { data: participants } = await admin
+    .from("session_participants")
+    .select("user_id")
+    .eq("session_id", data.sessionId)
+    .neq("user_id", data.creatorId);
+
+  if (!participants || participants.length === 0) return;
+
+  const participantIds = participants.map((p) => p.user_id);
+
+  // Post system chat message listing changes + deadline
+  const deadlineFormatted = format(
+    new Date(data.deadline),
+    "EEEE, MMMM d 'at' h:mm a"
+  );
+  const changesList = data.changes.map((c) => `• ${c}`).join("\n");
+  const systemContent = `Session updated by the host:\n${changesList}\n\nPlease confirm your attendance by ${deadlineFormatted} or your spot will be released.`;
+
+  await admin.from("session_messages").insert({
+    session_id: data.sessionId,
+    user_id: data.creatorId,
+    content: systemContent,
+    is_system_message: true,
+  });
+
+  // Get all participant profiles (edit/cancel emails are always sent - not optional)
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", participantIds);
+
+  if (!profiles || profiles.length === 0) return;
+
+  // Get emails from auth.users
+  const { data: authData } = await admin.auth.admin.listUsers();
+  const emailMap = new Map<string, string>();
+  authData?.users?.forEach((u) => {
+    if (u.email) emailMap.set(u.id, u.email);
+  });
+
+  const sessionDate = new Date(data.date + "T00:00:00");
+  const formattedDate = format(sessionDate, "EEEE, MMMM d, yyyy");
+  const sessionUrl = `${appUrl}/sessions/${data.sessionId}`;
+  const changesHtml = data.changes
+    .map((c) => `<li style="margin: 4px 0; color: #374151;">${c}</li>`)
+    .join("");
+
+  for (const profile of profiles) {
+    const email = emailMap.get(profile.id);
+    if (!email) continue;
+
+    const playerName = profile.full_name ?? "Player";
+
+    try {
+      await resend.emails.send({
+        from: "ShuttleMates <onboarding@resend.dev>",
+        to: email,
+        subject: `Session updated: ${data.title}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #1a1a1a; margin: 0 0 16px 0;">Session Updated</h2>
+            <p style="color: #374151; margin: 0 0 8px 0;">Hi ${playerName},</p>
+            <p style="color: #374151; margin: 0 0 16px 0;">The host has made changes to <strong>${data.title}</strong>:</p>
+            <div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin: 0 0 16px 0;">
+              <p style="margin: 0 0 8px 0; font-weight: bold; color: #1a1a1a;">What changed:</p>
+              <ul style="margin: 0; padding-left: 16px;">${changesHtml}</ul>
+            </div>
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
+              <p style="margin: 0; color: #92400e; font-weight: bold;">Action required</p>
+              <p style="margin: 4px 0 0 0; color: #92400e;">Please confirm your attendance by <strong>${deadlineFormatted}</strong> or your spot will be released.</p>
+            </div>
+            <a href="${sessionUrl}" style="display: inline-block; background: #18181b; color: #ffffff; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px;">Confirm Attendance</a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 24px;">You received this because you joined this session on ShuttleMates.</p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      console.error(`Failed to send edit notification to ${profile.id}:`, err);
+    }
+  }
+}
+
+export async function notifySessionCancelled(data: SessionCancelData) {
+  const admin = createAdminClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+  // Get all participants except creator
+  const { data: participants } = await admin
+    .from("session_participants")
+    .select("user_id")
+    .eq("session_id", data.sessionId)
+    .neq("user_id", data.creatorId);
+
+  if (!participants || participants.length === 0) return;
+
+  const participantIds = participants.map((p) => p.user_id);
+
+  // Post system chat message
+  await admin.from("session_messages").insert({
+    session_id: data.sessionId,
+    user_id: data.creatorId,
+    content: "Session has been cancelled by the host.",
+    is_system_message: true,
+  });
+
+  // Get all participant profiles (cancel emails are always sent - not optional)
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", participantIds);
+
+  if (!profiles || profiles.length === 0) return;
+
+  // Get emails from auth.users
+  const { data: authData } = await admin.auth.admin.listUsers();
+  const emailMap = new Map<string, string>();
+  authData?.users?.forEach((u) => {
+    if (u.email) emailMap.set(u.id, u.email);
+  });
+
+  const sessionDate = new Date(data.date + "T00:00:00");
+  const formattedDate = format(sessionDate, "EEEE, MMMM d, yyyy");
+  const sessionsUrl = `${appUrl}/sessions`;
+
+  for (const profile of profiles) {
+    const email = emailMap.get(profile.id);
+    if (!email) continue;
+
+    const playerName = profile.full_name ?? "Player";
+
+    try {
+      await resend.emails.send({
+        from: "ShuttleMates <onboarding@resend.dev>",
+        to: email,
+        subject: `Session cancelled: ${data.title}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #1a1a1a; margin: 0 0 16px 0;">Session Cancelled</h2>
+            <p style="color: #374151; margin: 0 0 8px 0;">Hi ${playerName},</p>
+            <p style="color: #374151; margin: 0 0 16px 0;">Unfortunately, the following session has been cancelled by the host:</p>
+            <div style="background: #fef2f2; border: 1px solid #ef4444; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
+              <h3 style="margin: 0 0 12px 0; color: #991b1b;">${data.title}</h3>
+              <p style="margin: 4px 0; color: #374151; font-size: 14px;">Date: ${formattedDate}</p>
+              <p style="margin: 4px 0; color: #374151; font-size: 14px;">Time: ${data.time.slice(0, 5)}</p>
+              <p style="margin: 4px 0; color: #374151; font-size: 14px;">Location: ${data.location}, ${data.city}</p>
+            </div>
+            <a href="${sessionsUrl}" style="display: inline-block; background: #18181b; color: #ffffff; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px;">Browse Sessions</a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 24px;">You received this because you joined this session on ShuttleMates.</p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      console.error(
+        `Failed to send cancellation notification to ${profile.id}:`,
+        err
+      );
+    }
   }
 }

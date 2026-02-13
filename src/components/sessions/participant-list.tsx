@@ -6,6 +6,8 @@ import { MessageCircle } from "lucide-react";
 
 interface Participant {
   user_id: string;
+  confirmed?: boolean;
+  confirmation_deadline?: string | null;
   profiles: {
     id: string;
     full_name: string | null;
@@ -18,9 +20,15 @@ interface ParticipantListProps {
   participants: Participant[];
   creatorId: string;
   currentUserId?: string;
+  showConfirmationStatus?: boolean;
 }
 
-export function ParticipantList({ participants, creatorId, currentUserId }: ParticipantListProps) {
+export function ParticipantList({
+  participants,
+  creatorId,
+  currentUserId,
+  showConfirmationStatus,
+}: ParticipantListProps) {
   return (
     <div className="space-y-3">
       {participants.map((p) => {
@@ -30,6 +38,7 @@ export function ParticipantList({ participants, creatorId, currentUserId }: Part
           .map((n) => n[0])
           .join("")
           .toUpperCase();
+        const isHost = p.user_id === creatorId;
 
         return (
           <div key={p.user_id} className="flex items-center justify-between">
@@ -40,7 +49,7 @@ export function ParticipantList({ participants, creatorId, currentUserId }: Part
               </Avatar>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{name}</span>
-                {p.user_id === creatorId && (
+                {isHost && (
                   <Badge variant="outline" className="text-xs">
                     Host
                   </Badge>
@@ -49,6 +58,17 @@ export function ParticipantList({ participants, creatorId, currentUserId }: Part
                   <Badge variant="secondary" className="text-xs">
                     {p.profiles.skill_level}
                   </Badge>
+                )}
+                {showConfirmationStatus && !isHost && (
+                  p.confirmed === false ? (
+                    <Badge variant="destructive" className="text-xs">
+                      Unconfirmed
+                    </Badge>
+                  ) : (
+                    <Badge className="text-xs bg-green-600 hover:bg-green-700">
+                      Confirmed
+                    </Badge>
+                  )
                 )}
               </div>
             </div>
