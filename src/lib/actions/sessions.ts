@@ -270,7 +270,7 @@ export async function editSession(
   if (session.title !== newData.title) changes.push(`Title: "${newData.title}"`);
   if (session.description !== newData.description) changes.push("Description updated");
   if (session.date !== newData.date) changes.push(`Date: ${newData.date}`);
-  if (session.time !== newData.time) changes.push(`Time: ${newData.time}`);
+  if (session.time.slice(0, 5) !== newData.time.slice(0, 5)) changes.push(`Time: ${newData.time}`);
   if (session.location !== newData.location) changes.push(`Location: ${newData.location}`);
   if (session.city !== newData.city) changes.push(`City: ${newData.city}`);
   if (session.skill_level !== newData.skill_level) changes.push(`Skill Level: ${newData.skill_level}`);
@@ -361,6 +361,17 @@ export async function confirmSession(sessionId: string) {
   } = await supabase.auth.getUser();
 
   if (!user) throw new Error("Not authenticated");
+
+  // Check if session is still active
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("status")
+    .eq("id", sessionId)
+    .single();
+
+  if (!session) throw new Error("Session not found");
+  if (session.status === "cancelled") throw new Error("This session has been cancelled");
+  if (session.status === "completed") throw new Error("This session has already completed");
 
   const { error } = await supabase
     .from("session_participants")
