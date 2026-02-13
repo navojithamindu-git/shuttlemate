@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MultiCityCombobox } from "@/components/ui/city-combobox";
 import { toast } from "sonner";
 
 interface SpecificAvailabilityFormProps {
@@ -76,12 +77,11 @@ export function SpecificAvailabilityForm({
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="specific-city">City</Label>
-            <Input
-              id="specific-city"
+            <Label>Cities</Label>
+            <MultiCityCombobox
               name="city"
-              defaultValue={defaultCity ?? ""}
-              placeholder="e.g., Colombo"
+              defaultValue={defaultCity ? defaultCity.split(", ").filter(Boolean) : []}
+              placeholder="Add cities..."
               required
             />
           </div>

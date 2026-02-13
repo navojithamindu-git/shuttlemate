@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MultiCityCombobox } from "@/components/ui/city-combobox";
 import type { Profile, SkillLevel } from "@/lib/types/database";
 
 const SKILL_LEVELS: { value: SkillLevel; label: string; desc: string }[] = [
@@ -33,7 +34,9 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
   const [skillLevel, setSkillLevel] = useState<SkillLevel>(
     profile?.skill_level ?? "Beginner"
   );
-  const [city, setCity] = useState(profile?.city ?? "");
+  const [cities, setCities] = useState<string[]>(
+    profile?.city ? profile.city.split(", ").filter(Boolean) : []
+  );
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +63,7 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
       .update({
         full_name: fullName,
         skill_level: skillLevel,
-        city,
+        city: cities.join(", "),
         bio,
         profile_complete: true,
       })
@@ -114,12 +117,11 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
         </Select>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="city">City / Area *</Label>
-        <Input
-          id="city"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          placeholder="e.g., Colombo, Kandy"
+        <Label>Cities you can play in *</Label>
+        <MultiCityCombobox
+          value={cities}
+          onValueChange={setCities}
+          placeholder="Add cities..."
           required
         />
       </div>

@@ -15,7 +15,8 @@ interface SessionCardProps {
     id: string;
     title: string;
     date: string;
-    time: string;
+    start_time: string;
+    end_time: string;
     location: string;
     city: string;
     skill_level: string;
@@ -26,9 +27,9 @@ interface SessionCardProps {
   };
 }
 
-function getTimingBadge(date: string, time: string) {
+function getTimingBadge(date: string, start_time: string) {
   const now = new Date();
-  const sessionDate = new Date(date + "T" + time);
+  const sessionDate = new Date(date + "T" + start_time);
   const daysUntil = differenceInCalendarDays(sessionDate, now);
 
   if (sessionDate < now) return { label: "Expired", variant: "destructive" as const };
@@ -40,7 +41,7 @@ function getTimingBadge(date: string, time: string) {
 
 export function SessionCard({ session }: SessionCardProps) {
   const participantCount = session.session_participants?.[0]?.count ?? 0;
-  const timing = getTimingBadge(session.date, session.time);
+  const timing = getTimingBadge(session.date, session.start_time);
   const isFull = session.status === "full" || participantCount >= session.max_players;
 
   return (
@@ -72,7 +73,7 @@ export function SessionCard({ session }: SessionCardProps) {
           </div>
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 shrink-0" />
-            <span>{session.time.slice(0, 5)}</span>
+            <span>{session.start_time.slice(0, 5)} – {session.end_time.slice(0, 5)}</span>
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 shrink-0" />
