@@ -66,6 +66,18 @@ export default async function SessionDetailPage({
       p.user_id !== session.creator_id && p.confirmed === false
   );
 
+  // DEBUG - remove after testing
+  const debugInfo = {
+    isCreator,
+    hasAnyUnconfirmed,
+    needsConfirmation: !!needsConfirmation,
+    participants: session.session_participants?.map((p: { user_id: string; confirmed: boolean; confirmation_deadline: string | null }) => ({
+      user_id: p.user_id.slice(0, 8),
+      confirmed: p.confirmed,
+      deadline: p.confirmation_deadline,
+    })),
+  };
+
   const creatorName = session.creator?.full_name ?? "Unknown";
   const creatorInitials = creatorName
     .split(" ")
@@ -89,6 +101,11 @@ export default async function SessionDetailPage({
 
   return (
     <div className="container max-w-3xl mx-auto py-8 px-4">
+      {/* DEBUG - remove after testing */}
+      <pre className="text-xs bg-yellow-100 text-black p-2 rounded mb-4 overflow-auto">
+        {JSON.stringify(debugInfo, null, 2)}
+      </pre>
+
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div>
