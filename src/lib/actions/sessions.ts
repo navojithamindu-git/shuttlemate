@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import type { GameType, SkillLevel } from "@/lib/types/database";
 
 export async function createSession(formData: FormData) {
@@ -40,25 +41,27 @@ export async function createSession(formData: FormData) {
     user_id: user.id,
   });
 
-  // Notify players whose availability matches this session
-  try {
-    const { notifyMatchingPlayers } = await import(
-      "@/lib/actions/notifications"
-    );
-    await notifyMatchingPlayers({
-      id: data.id,
-      creator_id: user.id,
-      title: sessionData.title,
-      date: sessionData.date,
-      time: sessionData.time,
-      location: sessionData.location,
-      city: sessionData.city,
-      skill_level: sessionData.skill_level,
-      game_type: sessionData.game_type,
-    });
-  } catch (err) {
-    console.error("Failed to send availability notifications:", err);
-  }
+  // Run notifications in the background (after response is sent)
+  after(async () => {
+    try {
+      const { notifyMatchingPlayers } = await import(
+        "@/lib/actions/notifications"
+      );
+      await notifyMatchingPlayers({
+        id: data.id,
+        creator_id: user.id,
+        title: sessionData.title,
+        date: sessionData.date,
+        time: sessionData.time,
+        location: sessionData.location,
+        city: sessionData.city,
+        skill_level: sessionData.skill_level,
+        game_type: sessionData.game_type,
+      });
+    } catch (err) {
+      console.error("Failed to send availability notifications:", err);
+    }
+  });
 
   revalidatePath("/sessions");
   redirect(`/sessions/${data.id}`);
@@ -200,23 +203,25 @@ export async function cancelSession(sessionId: string) {
 
   if (error) throw new Error(error.message);
 
-  // Notify participants about cancellation
-  try {
-    const { notifySessionCancelled } = await import(
-      "@/lib/actions/notifications"
-    );
-    await notifySessionCancelled({
-      sessionId,
-      title: session.title,
-      date: session.date,
-      time: session.time,
-      location: session.location,
-      city: session.city,
-      creatorId: user.id,
-    });
-  } catch (err) {
-    console.error("Failed to send cancellation notifications:", err);
-  }
+  // Run notifications in the background (after response is sent)
+  after(async () => {
+    try {
+      const { notifySessionCancelled } = await import(
+        "@/lib/actions/notifications"
+      );
+      await notifySessionCancelled({
+        sessionId,
+        title: session.title,
+        date: session.date,
+        time: session.time,
+        location: session.location,
+        city: session.city,
+        creatorId: user.id,
+      });
+    } catch (err) {
+      console.error("Failed to send cancellation notifications:", err);
+    }
+  });
 
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath("/sessions");
@@ -319,25 +324,28 @@ export async function editSession(
     deadline = sessionDateTime;
   }
 
-  // Reset confirmation + send notifications (both use admin client)
-  try {
-    const { notifySessionEdited } = await import(
-      "@/lib/actions/notifications"
-    );
-    await notifySessionEdited({
-      sessionId,
-      title: newData.title,
-      date: newData.date,
-      time: newData.time,
-      location: newData.location,
-      city: newData.city,
-      changes,
-      deadline: deadline.toISOString(),
-      creatorId: user.id,
-    });
-  } catch (err) {
-    console.error("Failed to send edit notifications:", err);
-  }
+  // Run notifications in the background (after response is sent)
+  // This prevents Vercel serverless function timeouts
+  after(async () => {
+    try {
+      const { notifySessionEdited } = await import(
+        "@/lib/actions/notifications"
+      );
+      await notifySessionEdited({
+        sessionId,
+        title: newData.title,
+        date: newData.date,
+        time: newData.time,
+        location: newData.location,
+        city: newData.city,
+        changes,
+        deadline: deadline.toISOString(),
+        creatorId: user.id,
+      });
+    } catch (err) {
+      console.error("Failed to send edit notifications:", err);
+    }
+  });
 
   revalidatePath(`/sessions/${sessionId}`);
   revalidatePath("/sessions");
