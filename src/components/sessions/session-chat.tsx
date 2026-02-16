@@ -68,6 +68,7 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
 
   const fetchMessages = useCallback(async () => {
     const supabase = createClient();
@@ -243,7 +244,11 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
   }, [fetchMessages]);
 
   useEffect(() => {
-    scrollToBottom();
+    // Only auto-scroll when new messages arrive, not on initial load
+    if (prevMessageCountRef.current > 0 && messages.length > prevMessageCountRef.current) {
+      scrollToBottom();
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   useEffect(() => {
