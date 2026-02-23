@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -13,6 +14,8 @@ import { SessionChat } from "@/components/sessions/session-chat";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import { format } from "date-fns";
 import { TimingBadge } from "@/components/sessions/timing-badge";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default async function SessionDetailPage({
   params,
@@ -26,7 +29,9 @@ export default async function SessionDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: session } = await supabase
+  // Use admin client so session data loads for both authenticated and guest users
+  const adminClient = createAdminClient();
+  const { data: session } = await adminClient
     .from("sessions")
     .select(
       `
@@ -69,7 +74,6 @@ export default async function SessionDetailPage({
 
   // A session is expired if its start time has already passed, regardless of DB status
   const isExpired = new Date(session.date + "T" + session.start_time) < new Date();
-
 
   const creatorName = session.creator?.full_name ?? "Unknown";
   const creatorInitials = creatorName
@@ -172,17 +176,25 @@ export default async function SessionDetailPage({
             {/* Action buttons */}
             {session.status !== "cancelled" && session.status !== "completed" && !isExpired && (
               <div className="flex gap-3">
-                <JoinLeaveButton
-                  sessionId={session.id}
-                  isJoined={isJoined ?? false}
-                  isCreator={isCreator}
-                  isFull={isFull}
-                />
-                {isCreator && (
+                {user ? (
                   <>
-                    <EditSessionButton sessionId={session.id} />
-                    <CancelSessionButton sessionId={session.id} />
+                    <JoinLeaveButton
+                      sessionId={session.id}
+                      isJoined={isJoined ?? false}
+                      isCreator={isCreator}
+                      isFull={isFull}
+                    />
+                    {isCreator && (
+                      <>
+                        <EditSessionButton sessionId={session.id} />
+                        <CancelSessionButton sessionId={session.id} />
+                      </>
+                    )}
                   </>
+                ) : (
+                  <Link href={`/login?redirect=/sessions/${session.id}`}>
+                    <Button>Sign in to join</Button>
+                  </Link>
                 )}
               </div>
             )}
