@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { cleanupExpiredSessions, cleanupUnconfirmedParticipants } from "@/lib/actions/sessions";
 import { SessionCard } from "@/components/sessions/session-card";
 import { SessionFilters } from "@/components/sessions/session-filters";
@@ -28,8 +29,14 @@ export default async function SessionsPage({
   }
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  let query = supabase
+  // Use admin client so the query works for both authenticated and guest users
+  // regardless of RLS policies on the sessions table
+  const adminClient = createAdminClient();
+  let query = adminClient
     .from("sessions")
     .select(
       `*, session_participants(count)`
@@ -48,12 +55,18 @@ export default async function SessionsPage({
     <div className="container mx-auto py-6 px-4">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Find Sessions</h1>
-        <Link href="/sessions/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Session
-          </Button>
-        </Link>
+        {user ? (
+          <Link href="/sessions/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Session
+            </Button>
+          </Link>
+        ) : (
+          <Link href="/signup">
+            <Button variant="outline">Sign up to create</Button>
+          </Link>
+        )}
       </div>
 
       <SessionFilters currentFilters={params} />
@@ -67,9 +80,15 @@ export default async function SessionsPage({
             <p className="text-muted-foreground text-lg mb-4">
               No sessions found
             </p>
-            <Link href="/sessions/new">
-              <Button>Be the first to create one</Button>
-            </Link>
+            {user ? (
+              <Link href="/sessions/new">
+                <Button>Be the first to create one</Button>
+              </Link>
+            ) : (
+              <Link href="/signup">
+                <Button>Sign up to create the first session</Button>
+              </Link>
+            )}
           </div>
         )}
       </div>
