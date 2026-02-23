@@ -67,6 +67,9 @@ export default async function SessionDetailPage({
       p.user_id !== session.creator_id && p.confirmed === false
   );
 
+  // A session is expired if its start time has already passed, regardless of DB status
+  const isExpired = new Date(session.date + "T" + session.start_time) < new Date();
+
 
   const creatorName = session.creator?.full_name ?? "Unknown";
   const creatorInitials = creatorName
@@ -167,7 +170,7 @@ export default async function SessionDetailPage({
             <Separator />
 
             {/* Action buttons */}
-            {session.status !== "cancelled" && session.status !== "completed" && (
+            {session.status !== "cancelled" && session.status !== "completed" && !isExpired && (
               <div className="flex gap-3">
                 <JoinLeaveButton
                   sessionId={session.id}
@@ -211,7 +214,7 @@ export default async function SessionDetailPage({
         </Card>
 
         {/* Session Chat - only for upcoming sessions */}
-        {(isJoined || isCreator) && user && session.status !== "cancelled" && session.status !== "completed" && (
+        {(isJoined || isCreator) && user && session.status !== "cancelled" && session.status !== "completed" && !isExpired && (
           <SessionChat sessionId={session.id} currentUserId={user.id} />
         )}
       </div>
