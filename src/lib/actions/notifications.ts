@@ -328,6 +328,7 @@ export async function notifySessionCancelled(data: SessionCancelData) {
         `Failed to send cancellation notification to ${profile.id}:`,
         err
       );
+      
     }
   }
 }
