@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resend } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/smtp";
 import { format } from "date-fns";
 
 interface SessionEditData {
@@ -122,8 +122,7 @@ export async function notifyMatchingPlayers(session: SessionData) {
       const playerName = profile.full_name ?? "Player";
       const sessionUrl = `${appUrl}/sessions/${session.id}`;
 
-      await resend.emails.send({
-        from: "ShuttleMates <onboarding@resend.dev>",
+      await sendEmail({
         to: email,
         subject: `New session matches your availability: ${session.title}`,
         html: `
@@ -229,8 +228,7 @@ export async function notifySessionEdited(data: SessionEditData) {
     const playerName = profile.full_name ?? "Player";
 
     try {
-      await resend.emails.send({
-        from: "ShuttleMates <onboarding@resend.dev>",
+      await sendEmail({
         to: email,
         subject: `Session updated: ${data.title}`,
         html: `
@@ -306,8 +304,7 @@ export async function notifySessionCancelled(data: SessionCancelData) {
     const playerName = profile.full_name ?? "Player";
 
     try {
-      await resend.emails.send({
-        from: "ShuttleMates <onboarding@resend.dev>",
+      await sendEmail({
         to: email,
         subject: `Session cancelled: ${data.title}`,
         html: `
@@ -331,6 +328,7 @@ export async function notifySessionCancelled(data: SessionCancelData) {
         `Failed to send cancellation notification to ${profile.id}:`,
         err
       );
+      
     }
   }
 }
