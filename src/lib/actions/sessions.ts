@@ -69,6 +69,48 @@ export async function createSession(formData: FormData) {
   redirect(`/sessions/${data.id}`);
 }
 
+function shiftTime(timeStr: string, minutesDelta: number): string {
+  const [h, m] = timeStr.split(":").map(Number);
+  const total = Math.max(0, Math.min(1439, h * 60 + m + minutesDelta));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+export async function checkOverlappingSessions({
+  city,
+  date,
+  start_time,
+  end_time,
+  excludeId,
+}: {
+  city: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  excludeId?: string;
+}): Promise<{ start_time: string; end_time: string }[]> {
+  const supabase = await createClient();
+
+  // 2-hour buffer — sessions within 2 hours of each other compete for the same players
+  const bufferedStart = shiftTime(start_time, -120);
+  const bufferedEnd = shiftTime(end_time, +120);
+
+  let query = supabase
+    .from("sessions")
+    .select("start_time, end_time")
+    .eq("city", city)
+    .eq("date", date)
+    .in("status", ["open", "full"])
+    .lt("start_time", bufferedEnd)
+    .gt("end_time", bufferedStart);
+
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data } = await query;
+  return data ?? [];
+}
+
 export async function cleanupExpiredSessions() {
   const supabase = await createClient();
   const today = new Date().toISOString().split("T")[0];

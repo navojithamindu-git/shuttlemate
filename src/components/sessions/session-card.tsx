@@ -88,7 +88,9 @@ export function SessionCard({ session }: SessionCardProps) {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Users className="h-4 w-4" />
             <span>
-              {participantCount}/{session.max_players} players
+              {isFull
+                ? `${participantCount} players · Full`
+                : `${participantCount} joined · need ${session.max_players - participantCount} more`}
             </span>
           </div>
         </CardFooter>

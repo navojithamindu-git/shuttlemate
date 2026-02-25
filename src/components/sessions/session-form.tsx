@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createSession, editSession } from "@/lib/actions/sessions";
+import { createSession, editSession, checkOverlappingSessions } from "@/lib/actions/sessions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CityCombobox } from "@/components/ui/city-combobox";
+import { AlertTriangle } from "lucide-react";
 import type { SessionFormData } from "@/lib/types/database";
 
 interface SessionFormProps {
@@ -28,6 +29,39 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const isEdit = mode === "edit";
+
+  // Track fields needed for overlap check
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const defaultDate = initialData?.date ?? tomorrow.toISOString().split("T")[0];
+
+  const [city, setCity] = useState(initialData?.city ?? "");
+  const [date, setDate] = useState(defaultDate);
+  const [startTime, setStartTime] = useState(initialData?.start_time?.slice(0, 5) ?? "09:00");
+  const [endTime, setEndTime] = useState(initialData?.end_time?.slice(0, 5) ?? "11:00");
+  const [overlappingSessions, setOverlappingSessions] = useState<{ start_time: string; end_time: string }[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    if (!city || !date || !startTime || !endTime) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      const sessions = await checkOverlappingSessions({
+        city,
+        date,
+        start_time: startTime,
+        end_time: endTime,
+        excludeId: isEdit ? initialData?.id : undefined,
+      });
+      setOverlappingSessions(sessions);
+    }, 500);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [city, date, startTime, endTime, isEdit, initialData?.id]);
 
   const handleSubmit = async (formData: FormData) => {
     setLoading(true);
@@ -50,11 +84,6 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
     }
   };
 
-  // Default date to tomorrow (for create mode)
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const defaultDate = initialData?.date ?? tomorrow.toISOString().split("T")[0];
-
   return (
     <Card>
       <CardHeader>
@@ -65,6 +94,18 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
           {error && (
             <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
               {error}
+            </div>
+          )}
+
+          {overlappingSessions.length > 0 && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 rounded-md dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>
+                {overlappingSessions.length === 1 ? "Another session" : `${overlappingSessions.length} other sessions`}{" "}
+                already exist in this city at a similar time
+                {" "}({overlappingSessions.map((s) => `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`).join(", ")}).
+                {" "}Players may be split between sessions.
+              </span>
             </div>
           )}
 
@@ -96,7 +137,8 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
               id="date"
               name="date"
               type="date"
-              defaultValue={defaultDate}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
               min={new Date().toISOString().split("T")[0]}
               required
             />
@@ -109,7 +151,8 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
                 id="start_time"
                 name="start_time"
                 type="time"
-                defaultValue={initialData?.start_time?.slice(0, 5) ?? "09:00"}
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
                 required
               />
             </div>
@@ -119,7 +162,8 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
                 id="end_time"
                 name="end_time"
                 type="time"
-                defaultValue={initialData?.end_time?.slice(0, 5) ?? "11:00"}
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
                 required
               />
             </div>
@@ -140,7 +184,8 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
               <Label>City *</Label>
               <CityCombobox
                 name="city"
-                defaultValue={initialData?.city ?? ""}
+                value={city}
+                onValueChange={setCity}
                 placeholder="Select city..."
                 required
               />
