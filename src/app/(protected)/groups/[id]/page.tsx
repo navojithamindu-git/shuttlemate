@@ -66,9 +66,17 @@ export default async function GroupDetailPage({
   const currentUserRole: GroupMemberRole = currentMember?.role ?? "member";
   const canManage = currentUserRole === "owner" || currentUserRole === "admin";
 
-  // Filter and sort upcoming sessions
+  // End of this week (Sunday = end of week, or next 7 days from today)
+  const endOfWeek = new Date();
+  endOfWeek.setDate(endOfWeek.getDate() + (7 - endOfWeek.getDay()));
+  const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
+
+  // Filter to this week's sessions only, sorted ascending
   const upcomingSessions = ((group.sessions as any[]) ?? [])
-    .filter((s: { date: string; status: string }) => s.date >= today && s.status !== "cancelled")
+    .filter(
+      (s: { date: string; status: string }) =>
+        s.date >= today && s.date <= endOfWeekStr && s.status !== "cancelled"
+    )
     .sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
 
   // Active invite link (non-expired)
@@ -127,25 +135,16 @@ export default async function GroupDetailPage({
       </div>
 
       {/* Main tabs */}
-      <Tabs defaultValue="chat" className="flex-1">
+      <Tabs defaultValue="schedule" className="flex-1">
         <TabsList className="w-full">
-          <TabsTrigger value="chat" className="flex-1">Chat</TabsTrigger>
           <TabsTrigger value="schedule" className="flex-1">
             Schedule{upcomingSessions.length > 0 && ` (${upcomingSessions.length})`}
           </TabsTrigger>
+          <TabsTrigger value="chat" className="flex-1">Chat</TabsTrigger>
           <TabsTrigger value="members" className="flex-1">
             Members ({(group.group_members as any[]).length})
           </TabsTrigger>
         </TabsList>
-
-        {/* Chat tab */}
-        <TabsContent value="chat" className="mt-4">
-          <Card className="overflow-hidden">
-            <div className="h-[calc(100vh-20rem)] flex flex-col">
-              <GroupChat groupId={id} currentUserId={user.id} />
-            </div>
-          </Card>
-        </TabsContent>
 
         {/* Schedule tab */}
         <TabsContent value="schedule" className="mt-4 space-y-3">
@@ -163,6 +162,15 @@ export default async function GroupDetailPage({
               />
             ))
           )}
+        </TabsContent>
+
+        {/* Chat tab */}
+        <TabsContent value="chat" className="mt-4">
+          <Card className="overflow-hidden">
+            <div className="h-[calc(100vh-20rem)] flex flex-col">
+              <GroupChat groupId={id} currentUserId={user.id} />
+            </div>
+          </Card>
         </TabsContent>
 
         {/* Members tab */}

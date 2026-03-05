@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CityCombobox } from "@/components/ui/city-combobox";
 import {
   Select,
   SelectContent,
@@ -142,12 +143,11 @@ export function GroupForm({ mode, group }: GroupFormProps) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="city">City</Label>
-          <Input
-            id="city"
+          <Label>City</Label>
+          <CityCombobox
             name="city"
-            placeholder="Colombo"
-            defaultValue={group?.city}
+            defaultValue={group?.city ?? ""}
+            placeholder="Select city..."
             required
           />
         </div>
