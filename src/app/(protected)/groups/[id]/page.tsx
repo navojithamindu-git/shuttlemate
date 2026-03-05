@@ -66,16 +66,15 @@ export default async function GroupDetailPage({
   const currentUserRole: GroupMemberRole = currentMember?.role ?? "member";
   const canManage = currentUserRole === "owner" || currentUserRole === "admin";
 
-  // End of this week (Sunday = end of week, or next 7 days from today)
-  const endOfWeek = new Date();
-  endOfWeek.setDate(endOfWeek.getDate() + (7 - endOfWeek.getDay()));
-  const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
+  // Next 7 days of sessions
+  const next7Days = new Date();
+  next7Days.setDate(next7Days.getDate() + 7);
+  const next7DaysStr = next7Days.toISOString().split("T")[0];
 
-  // Filter to this week's sessions only, sorted ascending
   const upcomingSessions = ((group.sessions as any[]) ?? [])
     .filter(
       (s: { date: string; status: string }) =>
-        s.date >= today && s.date <= endOfWeekStr && s.status !== "cancelled"
+        s.date >= today && s.date <= next7DaysStr && s.status !== "cancelled"
     )
     .sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
 
