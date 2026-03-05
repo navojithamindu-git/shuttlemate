@@ -533,6 +533,59 @@ export async function removeMember(groupId: string, targetUserId: string) {
 
 // ─── Update RSVP ─────────────────────────────────────────────────────────────
 
+export async function cancelGroupSession(sessionId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  // Only owner/admin can cancel
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("group_id, date")
+    .eq("id", sessionId)
+    .single();
+
+  if (!session?.group_id) throw new Error("Session not found");
+
+  const { data: member } = await supabase
+    .from("group_members")
+    .select("role")
+    .eq("group_id", session.group_id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!member || !["owner", "admin"].includes(member.role)) {
+    throw new Error("Not authorized");
+  }
+
+  const admin = createAdminClient();
+
+  await admin.from("sessions").update({ status: "cancelled" }).eq("id", sessionId);
+
+  // Post system message
+  const { data: group } = await admin
+    .from("recurring_groups")
+    .select("owner_id, name, day_of_week")
+    .eq("id", session.group_id)
+    .single();
+
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const formattedDate = format(new Date(session.date + "T00:00:00"), "MMMM d, yyyy");
+  await admin.from("group_messages").insert({
+    group_id: session.group_id,
+    user_id: group?.owner_id ?? user.id,
+    content: `❌ Session cancelled: ${dayNames[group?.day_of_week ?? 0]} ${formattedDate}.`,
+    is_system_message: true,
+  });
+
+  revalidatePath(`/groups/${session.group_id}`);
+}
+
+// ─── Update RSVP ─────────────────────────────────────────────────────────────
+
 export async function updateGroupRsvp(sessionId: string, status: RsvpStatus) {
   const supabase = await createClient();
   const {

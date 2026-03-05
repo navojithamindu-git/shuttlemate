@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Users } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { updateGroupRsvp } from "@/lib/actions/groups";
+import { updateGroupRsvp, cancelGroupSession } from "@/lib/actions/groups";
 import type { GroupMember, GroupSessionRsvp, RsvpStatus, Session } from "@/lib/types/database";
 import type { Profile } from "@/lib/types/database";
 
@@ -18,6 +18,7 @@ interface GroupSessionCardProps {
     profiles: Pick<Profile, "id" | "full_name" | "avatar_url">;
   })[];
   currentUserId: string;
+  canManage?: boolean;
 }
 
 const RSVP_OPTIONS: { status: RsvpStatus; label: string; emoji: string }[] = [
@@ -36,9 +37,11 @@ export function GroupSessionCard({
   session,
   groupMembers,
   currentUserId,
+  canManage = false,
 }: GroupSessionCardProps) {
   const [rsvps, setRsvps] = useState<GroupSessionRsvp[]>(session.group_session_rsvps ?? []);
   const [isPending, startTransition] = useTransition();
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const myRsvp = rsvps.find((r) => r.user_id === currentUserId)?.status ?? "yes";
 
@@ -57,6 +60,17 @@ export function GroupSessionCard({
         // Revert
         setRsvps(session.group_session_rsvps ?? []);
         toast.error(err instanceof Error ? err.message : "Failed to update RSVP");
+      }
+    });
+  };
+
+  const handleCancel = () => {
+    startTransition(async () => {
+      try {
+        await cancelGroupSession(session.id);
+        toast.success("Session cancelled");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to cancel session");
       }
     });
   };
@@ -99,9 +113,33 @@ export function GroupSessionCard({
               <span>{session.location}</span>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground shrink-0">
-            <Users className="h-4 w-4" />
-            <span>{byStatus.yes.length}/{session.max_players}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Users className="h-4 w-4" />
+              {byStatus.yes.length}/{session.max_players}
+            </span>
+            {canManage && !confirmCancel && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                onClick={() => setConfirmCancel(true)}
+                disabled={isPending}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {canManage && confirmCancel && (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">Cancel session?</span>
+                <Button size="sm" variant="destructive" className="h-6 px-2 text-xs" onClick={handleCancel} disabled={isPending}>
+                  Yes
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setConfirmCancel(false)} disabled={isPending}>
+                  No
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
