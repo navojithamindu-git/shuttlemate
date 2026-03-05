@@ -161,7 +161,7 @@ export async function generateGroupSessions(
         city: group.city,
         skill_level: group.skill_level,
         game_type: group.game_type,
-        max_players: Math.max(memberIds.length, group.max_players, 2),
+        max_players: Math.max(memberIds.length, 2),
         group_id: groupId,
         is_private: true,
         status: "open",
@@ -586,6 +586,39 @@ export async function cancelGroupSession(sessionId: string) {
   });
 
   revalidatePath(`/groups/${session.group_id}`);
+}
+
+// ─── Delete recurring group ───────────────────────────────────────────────────
+
+export async function deleteRecurringGroup(groupId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  // Only owner can delete
+  const { data: member } = await supabase
+    .from("group_members")
+    .select("role")
+    .eq("group_id", groupId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (member?.role !== "owner") throw new Error("Only the group owner can delete this group");
+
+  const admin = createAdminClient();
+  const today = new Date().toISOString().split("T")[0];
+
+  // Delete future sessions explicitly (FK is ON DELETE SET NULL, not CASCADE)
+  await admin.from("sessions").delete().eq("group_id", groupId).gte("date", today);
+
+  // Delete the group — cascades to group_members, group_messages, group_invitations
+  await admin.from("recurring_groups").delete().eq("id", groupId);
+
+  revalidatePath("/groups");
+  redirect("/groups");
 }
 
 // ─── Update RSVP ─────────────────────────────────────────────────────────────

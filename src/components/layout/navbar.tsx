@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -32,8 +32,13 @@ interface NavbarProps {
 
 export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenticated = true }: NavbarProps) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const { setTheme, resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const initials = userName
     ? userName
@@ -49,6 +54,8 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
     router.push("/");
     router.refresh();
   };
+
+  const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
 
   const navLinks = [
     { href: "/sessions", label: "Find Sessions", icon: Calendar },
@@ -88,7 +95,7 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                onClick={toggleTheme}
               >
                 <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                 <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -130,7 +137,7 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                onClick={toggleTheme}
               >
                 <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                 <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -185,14 +192,14 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
                     Profile
                   </Link>
                   <button
-                    onClick={() => {
-                      setTheme(resolvedTheme === "dark" ? "light" : "dark");
-                    }}
+                    onClick={toggleTheme}
                     className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground text-left"
                   >
                     <Sun className="h-4 w-4 dark:hidden" />
                     <Moon className="h-4 w-4 hidden dark:block" />
-                    {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
+                    <span suppressHydrationWarning>
+                      {mounted ? (resolvedTheme === "dark" ? "Light Mode" : "Dark Mode") : "Toggle Theme"}
+                    </span>
                   </button>
                   <button
                     onClick={() => {
@@ -216,14 +223,14 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
                     Find Sessions
                   </Link>
                   <button
-                    onClick={() => {
-                      setTheme(resolvedTheme === "dark" ? "light" : "dark");
-                    }}
+                    onClick={toggleTheme}
                     className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground text-left"
                   >
                     <Sun className="h-4 w-4 dark:hidden" />
                     <Moon className="h-4 w-4 hidden dark:block" />
-                    {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
+                    <span suppressHydrationWarning>
+                      {mounted ? (resolvedTheme === "dark" ? "Light Mode" : "Dark Mode") : "Toggle Theme"}
+                    </span>
                   </button>
                   <Link href="/login" onClick={() => setOpen(false)}>
                     <Button variant="outline" className="w-full">Sign in</Button>
