@@ -51,7 +51,7 @@ export async function createRecurringGroup(formData: FormData) {
     city: formData.get("city") as string,
     skill_level: formData.get("skill_level") as SkillLevel,
     game_type: formData.get("game_type") as GameType,
-    max_players: parseInt(formData.get("max_players") as string),
+    max_players: 20, // session capacity = member count at generation time
   };
 
   const admin = createAdminClient();
@@ -161,7 +161,7 @@ export async function generateGroupSessions(
         city: group.city,
         skill_level: group.skill_level,
         game_type: group.game_type,
-        max_players: group.max_players,
+        max_players: memberIds.length || group.max_players,
         group_id: groupId,
         is_private: true,
         status: "open",
@@ -602,7 +602,6 @@ export async function updateGroup(
     city: formData.get("city") as string,
     skill_level: formData.get("skill_level") as SkillLevel,
     game_type: formData.get("game_type") as GameType,
-    max_players: parseInt(formData.get("max_players") as string),
   };
 
   const { error } = await supabase

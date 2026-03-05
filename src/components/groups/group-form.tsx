@@ -162,8 +162,8 @@ export function GroupForm({ mode, group }: GroupFormProps) {
         </div>
       </div>
 
-      {/* Skill + Game type + Max players */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Skill + Game type */}
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Skill level</Label>
           <Select name="skill_level" defaultValue={group?.skill_level ?? "Open"} required onValueChange={markDirty}>
@@ -189,18 +189,6 @@ export function GroupForm({ mode, group }: GroupFormProps) {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="max_players">Max players</Label>
-          <Input
-            id="max_players"
-            name="max_players"
-            type="number"
-            min={2}
-            max={20}
-            defaultValue={group?.max_players ?? 4}
-            required
-          />
         </div>
       </div>
 
