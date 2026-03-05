@@ -159,6 +159,7 @@ export default async function GroupDetailPage({
                 session={session}
                 groupMembers={group.group_members as any[]}
                 currentUserId={user.id}
+                canManage={canManage}
               />
             ))
           )}
