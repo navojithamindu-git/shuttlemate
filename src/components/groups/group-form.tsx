@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,8 +37,10 @@ interface GroupFormProps {
 }
 
 export function GroupForm({ mode, group }: GroupFormProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -54,6 +57,7 @@ export function GroupForm({ mode, group }: GroupFormProps) {
             setError(result.error);
           } else {
             toast.success("Group updated");
+            router.push(`/groups/${group.id}`);
           }
         }
       } catch (err) {
@@ -65,8 +69,12 @@ export function GroupForm({ mode, group }: GroupFormProps) {
     });
   };
 
+  const markDirty = () => {
+    if (!isDirty) setIsDirty(true);
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" onChange={markDirty}>
       {/* Name */}
       <div className="space-y-1.5">
         <Label htmlFor="name">Group name</Label>
@@ -95,7 +103,7 @@ export function GroupForm({ mode, group }: GroupFormProps) {
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5">
           <Label>Day of week</Label>
-          <Select name="day_of_week" defaultValue={group?.day_of_week?.toString() ?? "2"} required>
+          <Select name="day_of_week" defaultValue={group?.day_of_week?.toString() ?? "2"} required onValueChange={markDirty}>
             <SelectTrigger>
               <SelectValue placeholder="Day" />
             </SelectTrigger>
@@ -149,6 +157,7 @@ export function GroupForm({ mode, group }: GroupFormProps) {
             defaultValue={group?.city ?? ""}
             placeholder="Select city..."
             required
+            onValueChange={markDirty}
           />
         </div>
       </div>
@@ -157,7 +166,7 @@ export function GroupForm({ mode, group }: GroupFormProps) {
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5">
           <Label>Skill level</Label>
-          <Select name="skill_level" defaultValue={group?.skill_level ?? "Open"} required>
+          <Select name="skill_level" defaultValue={group?.skill_level ?? "Open"} required onValueChange={markDirty}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -170,7 +179,7 @@ export function GroupForm({ mode, group }: GroupFormProps) {
         </div>
         <div className="space-y-1.5">
           <Label>Game type</Label>
-          <Select name="game_type" defaultValue={group?.game_type ?? "Either"} required>
+          <Select name="game_type" defaultValue={group?.game_type ?? "Either"} required onValueChange={markDirty}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -197,7 +206,11 @@ export function GroupForm({ mode, group }: GroupFormProps) {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button type="submit" disabled={isPending} className="w-full">
+      <Button
+        type="submit"
+        disabled={isPending || (mode === "edit" && !isDirty)}
+        className="w-full"
+      >
         {isPending
           ? mode === "create" ? "Creating..." : "Saving..."
           : mode === "create" ? "Create Group" : "Save Changes"}
