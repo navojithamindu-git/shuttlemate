@@ -47,6 +47,12 @@ export function GroupForm({ mode, group }: GroupFormProps) {
     setError(null);
     const formData = new FormData(e.currentTarget);
 
+    const city = formData.get("city") as string;
+    if (!city) {
+      setError("Please select a city.");
+      return;
+    }
+
     startTransition(async () => {
       try {
         if (mode === "create") {
