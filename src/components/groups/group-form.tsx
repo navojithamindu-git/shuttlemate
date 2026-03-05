@@ -41,6 +41,7 @@ export function GroupForm({ mode, group }: GroupFormProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [city, setCity] = useState(group?.city ?? "");
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -80,7 +81,7 @@ export function GroupForm({ mode, group }: GroupFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" onChange={markDirty}>
+    <form onSubmit={handleSubmit} className="space-y-4" onChange={markDirty} noValidate>
       {/* Name */}
       <div className="space-y-1.5">
         <Label htmlFor="name">Group name</Label>
@@ -160,10 +161,9 @@ export function GroupForm({ mode, group }: GroupFormProps) {
           <Label>City</Label>
           <CityCombobox
             name="city"
-            defaultValue={group?.city ?? ""}
+            value={city}
+            onValueChange={(v) => { setCity(v); markDirty(); }}
             placeholder="Select city..."
-            required
-            onValueChange={markDirty}
           />
         </div>
       </div>

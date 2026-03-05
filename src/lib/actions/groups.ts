@@ -161,7 +161,7 @@ export async function generateGroupSessions(
         city: group.city,
         skill_level: group.skill_level,
         game_type: group.game_type,
-        max_players: memberIds.length || group.max_players,
+        max_players: Math.max(memberIds.length, group.max_players, 2),
         group_id: groupId,
         is_private: true,
         status: "open",
@@ -252,6 +252,15 @@ export async function rollGroupSessions(groupId: string) {
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
 
+  const { data: group } = await admin
+    .from("recurring_groups")
+    .select("*")
+    .eq("id", groupId)
+    .eq("is_active", true)
+    .single();
+
+  if (!group) return;
+
   const { data: latestSession } = await admin
     .from("sessions")
     .select("date")
@@ -261,7 +270,11 @@ export async function rollGroupSessions(groupId: string) {
     .limit(1)
     .single();
 
-  if (!latestSession) return;
+  // No sessions yet — generate initial 4
+  if (!latestSession) {
+    await generateGroupSessions(groupId, group, 4);
+    return;
+  }
 
   const latestDate = new Date(latestSession.date + "T00:00:00");
   const daysUntilLatest = Math.floor(
@@ -269,15 +282,6 @@ export async function rollGroupSessions(groupId: string) {
   );
 
   if (daysUntilLatest > 7) return;
-
-  const { data: group } = await admin
-    .from("recurring_groups")
-    .select("*")
-    .eq("id", groupId)
-    .eq("is_active", true)
-    .single();
-
-  if (!group) return;
 
   await generateGroupSessions(groupId, group, 1);
 }

@@ -143,6 +143,13 @@ export function GroupSessionCard({
           </div>
         </div>
 
+        {/* Tomorrow reminder */}
+        {isTomorrow && (
+          <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+            Session is tomorrow — please confirm your attendance below.
+          </div>
+        )}
+
         {/* RSVP grid */}
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           {RSVP_OPTIONS.map(({ status, label, emoji }) => (
