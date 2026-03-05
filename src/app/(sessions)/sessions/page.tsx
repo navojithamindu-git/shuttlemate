@@ -42,6 +42,7 @@ export default async function SessionsPage({
       `*, session_participants(count)`
     )
     .in("status", ["open", "full"])
+    .eq("is_private", false)
     .gte("date", new Date().toISOString().split("T")[0])
     .order("date", { ascending: true });
 
