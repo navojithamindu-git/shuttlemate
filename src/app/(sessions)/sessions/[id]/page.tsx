@@ -225,9 +225,21 @@ export default async function SessionDetailPage({
           </CardContent>
         </Card>
 
-        {/* Session Chat - only for upcoming sessions */}
-        {(isJoined || isCreator) && user && session.status !== "cancelled" && session.status !== "completed" && !isExpired && (
+        {/* Session Chat - only for public upcoming sessions; group sessions use group chat */}
+        {(isJoined || isCreator) && user && session.status !== "cancelled" && session.status !== "completed" && !isExpired && !session.group_id && (
           <SessionChat sessionId={session.id} currentUserId={user.id} />
+        )}
+        {session.group_id && (isJoined || isCreator) && user && (
+          <Card>
+            <CardContent className="pt-6 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Chat for this session lives in your group.
+              </p>
+              <Link href={`/groups/${session.group_id}`}>
+                <Button variant="outline" size="sm">Open Group Chat</Button>
+              </Link>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

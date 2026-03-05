@@ -63,6 +63,8 @@ export interface Session {
   max_players: number;
   status: SessionStatus;
   last_edited_at: string | null;
+  group_id: string | null;
+  is_private: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -118,4 +120,69 @@ export interface AvailabilityRecurring {
   end_time: string;
   city: string;
   created_at: string;
+}
+
+// ---- Recurring Groups ----
+
+export type GroupMemberRole = "owner" | "admin" | "member";
+export type RsvpStatus = "yes" | "maybe" | "no";
+
+export interface RecurringGroup {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  location: string;
+  city: string;
+  skill_level: SkillLevel;
+  game_type: GameType;
+  max_players: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupMember {
+  id: string;
+  group_id: string;
+  user_id: string;
+  role: GroupMemberRole;
+  joined_at: string;
+}
+
+export interface GroupMessage {
+  id: string;
+  group_id: string;
+  user_id: string;
+  content: string;
+  is_edited: boolean;
+  is_deleted: boolean;
+  is_system_message: boolean;
+  created_at: string;
+}
+
+export interface GroupSessionRsvp {
+  id: string;
+  session_id: string;
+  user_id: string;
+  status: RsvpStatus;
+  updated_at: string;
+}
+
+export interface GroupInvitation {
+  id: string;
+  group_id: string;
+  token: string;
+  created_by: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface RecurringGroupWithDetails extends RecurringGroup {
+  group_members: (GroupMember & {
+    profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
+  })[];
 }

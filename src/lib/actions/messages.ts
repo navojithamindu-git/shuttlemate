@@ -129,8 +129,67 @@ export async function deleteSessionMessage(messageId: string) {
   if (error) throw new Error(error.message);
 }
 
+export async function sendGroupMessage(groupId: string, content: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const trimmed = content.trim();
+  if (!trimmed) throw new Error("Message cannot be empty");
+
+  const { error } = await supabase.from("group_messages").insert({
+    group_id: groupId,
+    user_id: user.id,
+    content: trimmed,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/groups/${groupId}`);
+}
+
+export async function editGroupMessage(messageId: string, newContent: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const trimmed = newContent.trim();
+  if (!trimmed) throw new Error("Message cannot be empty");
+
+  const { error } = await supabase
+    .from("group_messages")
+    .update({ content: trimmed, is_edited: true })
+    .eq("id", messageId)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteGroupMessage(messageId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("group_messages")
+    .update({ content: "", is_deleted: true })
+    .eq("id", messageId)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function toggleReaction(
-  messageType: "direct" | "session",
+  messageType: "direct" | "session" | "group",
   messageId: string,
   emoji: string
 ) {
@@ -142,7 +201,11 @@ export async function toggleReaction(
   if (!user) throw new Error("Not authenticated");
 
   const column =
-    messageType === "direct" ? "direct_message_id" : "session_message_id";
+    messageType === "direct"
+      ? "direct_message_id"
+      : messageType === "session"
+      ? "session_message_id"
+      : "group_message_id";
 
   // Check if reaction already exists
   const { data: existing } = await supabase
