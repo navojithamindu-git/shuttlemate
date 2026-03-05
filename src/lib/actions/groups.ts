@@ -141,8 +141,12 @@ export async function generateGroupSessions(
 
   const memberIds = members?.map((m) => m.user_id) ?? [];
 
-  for (const date of newDates) {
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  for (let i = 0; i < newDates.length; i++) {
+    const date = newDates[i];
     const dateStr = date.toISOString().split("T")[0];
+    const isFirst = i === 0;
 
     // Insert the session
     const { data: session, error: sessionError } = await admin
@@ -171,23 +175,17 @@ export async function generateGroupSessions(
     }
 
     if (memberIds.length > 0) {
-      // Bulk insert session_participants
       await admin.from("session_participants").insert(
         memberIds.map((uid) => ({ session_id: session.id, user_id: uid }))
       );
-
-      // Bulk insert default yes RSVPs
       await admin.from("group_session_rsvps").insert(
-        memberIds.map((uid) => ({
-          session_id: session.id,
-          user_id: uid,
-          status: "yes",
-        }))
+        memberIds.map((uid) => ({ session_id: session.id, user_id: uid, status: "yes" }))
       );
     }
 
-    // Post system message in group chat for the new session
-    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    // Only announce the nearest session — skip silent future ones
+    if (!isFirst) continue;
+
     const formattedDate = format(date, "MMMM d, yyyy");
     await admin.from("group_messages").insert({
       group_id: groupId,
@@ -196,7 +194,6 @@ export async function generateGroupSessions(
       is_system_message: true,
     });
 
-    // Send email to members with notifications enabled
     if (memberIds.length > 0) {
       const { data: profiles } = await admin
         .from("profiles")
@@ -629,12 +626,65 @@ export async function updateGroup(
     after(async () => {
       const admin = createAdminClient();
       const changesList = changes.map((c) => `• ${c}`).join("\n");
+
       await admin.from("group_messages").insert({
         group_id: groupId,
         user_id: user.id,
         content: `Group settings updated:\n${changesList}`,
         is_system_message: true,
       });
+
+      // Email members about the changes
+      const { data: members } = await admin
+        .from("group_members")
+        .select("user_id")
+        .eq("group_id", groupId);
+
+      if (!members || members.length === 0) return;
+      const memberIds = members.map((m) => m.user_id);
+
+      const { data: profiles } = await admin
+        .from("profiles")
+        .select("id, full_name, email_notifications")
+        .in("id", memberIds)
+        .eq("email_notifications", true);
+
+      if (!profiles || profiles.length === 0) return;
+
+      const { data: authData } = await admin.auth.admin.listUsers();
+      const emailMap = new Map<string, string>();
+      authData?.users?.forEach((u) => {
+        if (u.email) emailMap.set(u.id, u.email);
+      });
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const groupUrl = `${appUrl}/groups/${groupId}`;
+      const { sendEmail } = await import("@/lib/email/smtp");
+
+      for (const profile of profiles) {
+        const email = emailMap.get(profile.id);
+        if (!email) continue;
+        try {
+          await sendEmail({
+            to: email,
+            subject: `${newData.name} — group settings updated`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+                <h2 style="color: #1a1a1a; margin: 0 0 16px 0;">Group settings updated</h2>
+                <p style="color: #374151; margin: 0 0 8px 0;">Hi ${profile.full_name ?? "Player"},</p>
+                <p style="color: #374151; margin: 0 0 16px 0;">The settings for your group <strong>${newData.name}</strong> have been updated:</p>
+                <div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin: 0 0 20px 0; white-space: pre-line; font-size: 14px; color: #374151;">
+${changes.map((c) => `• ${c}`).join("\n")}
+                </div>
+                <a href="${groupUrl}" style="display: inline-block; background: #18181b; color: #ffffff; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px;">View Group</a>
+                <p style="color: #9ca3af; font-size: 12px; margin-top: 24px;">You received this because you are a member of ${newData.name} on ShuttleMates.</p>
+              </div>
+            `,
+          });
+        } catch (err) {
+          console.error(`Failed to send update email to ${profile.id}:`, err);
+        }
+      }
     });
   }
 
