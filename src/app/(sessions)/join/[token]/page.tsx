@@ -7,8 +7,55 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import Link from "next/link";
 import { JoinGroupButton } from "@/components/groups/join-group-button";
+import type { Metadata } from "next";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  const admin = createAdminClient();
+
+  const { data: invitation } = await admin
+    .from("group_invitations")
+    .select("group_id, expires_at")
+    .eq("token", token)
+    .single();
+
+  if (!invitation || new Date(invitation.expires_at) < new Date()) {
+    return { title: "Invalid Invite — ShuttleMates" };
+  }
+
+  const { data: group } = await admin
+    .from("recurring_groups")
+    .select("name, day_of_week, start_time, location, city, skill_level, group_members(count)")
+    .eq("id", invitation.group_id)
+    .single();
+
+  if (!group) return { title: "Group Invite — ShuttleMates" };
+
+  const memberCount = (group.group_members as any[])?.[0]?.count ?? 0;
+  const title = `🏸 You're invited to join ${group.name}!`;
+  const description = `Every ${DAY_NAMES[group.day_of_week]} · ${group.start_time.slice(0, 5)} · ${group.location}, ${group.city} · ${group.skill_level} · ${memberCount} member${memberCount !== 1 ? "s" : ""}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      siteName: "ShuttleMates",
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+  };
+}
 
 export default async function JoinGroupPage({
   params,
