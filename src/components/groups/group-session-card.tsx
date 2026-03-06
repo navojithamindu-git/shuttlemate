@@ -116,7 +116,7 @@ export function GroupSessionCard({
           <div className="flex items-center gap-2 shrink-0">
             <span className="flex items-center gap-1 text-sm text-muted-foreground">
               <Users className="h-4 w-4" />
-              {byStatus.yes.length}/{session.max_players}
+              {byStatus.yes.length}/{groupMembers.length}
             </span>
             {canManage && !confirmCancel && (
               <Button
