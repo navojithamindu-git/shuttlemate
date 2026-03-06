@@ -415,6 +415,7 @@ export async function acceptInvite(token: string) {
     await admin.from("group_session_rsvps").insert(
       sessionIds.map((sid) => ({ session_id: sid, user_id: user.id, status: "yes" }))
     );
+
   }
 
   // Post system message
