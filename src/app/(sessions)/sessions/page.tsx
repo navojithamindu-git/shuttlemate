@@ -11,6 +11,8 @@ interface SearchParams {
   city?: string;
   skill_level?: string;
   game_type?: string;
+  date_from?: string;
+  date_to?: string;
 }
 
 export default async function SessionsPage({
@@ -36,6 +38,8 @@ export default async function SessionsPage({
   // Use admin client so the query works for both authenticated and guest users
   // regardless of RLS policies on the sessions table
   const adminClient = createAdminClient();
+  const today = new Date().toISOString().split("T")[0];
+
   let query = adminClient
     .from("sessions")
     .select(
@@ -43,9 +47,10 @@ export default async function SessionsPage({
     )
     .in("status", ["open", "full"])
     .eq("is_private", false)
-    .gte("date", new Date().toISOString().split("T")[0])
+    .gte("date", params.date_from ?? today)
     .order("date", { ascending: true });
 
+  if (params.date_to) query = query.lte("date", params.date_to);
   if (params.city) query = query.eq("city", params.city);
   if (params.skill_level) query = query.eq("skill_level", params.skill_level);
   if (params.game_type) query = query.eq("game_type", params.game_type);
