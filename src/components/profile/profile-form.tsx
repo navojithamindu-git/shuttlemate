@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultiCityCombobox } from "@/components/ui/city-combobox";
-import type { Profile, SkillLevel } from "@/lib/types/database";
+import type { Profile, SkillLevel, Gender } from "@/lib/types/database";
 
 const SKILL_LEVELS: { value: SkillLevel; label: string; desc: string }[] = [
   { value: "Beginner", label: "Beginner", desc: "Learning basics, casual play" },
@@ -34,6 +34,8 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
   const [skillLevel, setSkillLevel] = useState<SkillLevel>(
     profile?.skill_level ?? "Beginner"
   );
+  const [gender, setGender] = useState<Gender | "">(profile?.gender ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.date_of_birth ?? "");
   const [cities, setCities] = useState<string[]>(
     profile?.city ? profile.city.split(", ").filter(Boolean) : []
   );
@@ -63,6 +65,8 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
       .update({
         full_name: fullName,
         skill_level: skillLevel,
+        gender: gender || null,
+        date_of_birth: dateOfBirth || null,
         city: cities.join(", "),
         bio,
         profile_complete: true,
@@ -115,6 +119,32 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
             ))}
           </SelectContent>
         </Select>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="gender">Gender</Label>
+          <Select value={gender} onValueChange={(v) => setGender(v as Gender)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select gender..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Male">Male</SelectItem>
+              <SelectItem value="Female">Female</SelectItem>
+              <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dateOfBirth">Date of Birth</Label>
+          <Input
+            id="dateOfBirth"
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+            max={new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split("T")[0]}
+            min={new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split("T")[0]}
+          />
+        </div>
       </div>
       <div className="space-y-2">
         <Label>Cities you can play in *</Label>

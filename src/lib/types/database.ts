@@ -12,9 +12,17 @@ export interface Profile {
   city: string | null;
   bio: string | null;
   avatar_url: string | null;
+  date_of_birth: string | null;
   profile_complete: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface PlayerPreferences {
+  male_slots?: number;
+  female_slots?: number;
+  min_age?: number;
+  max_age?: number;
 }
 
 export interface SessionMessage {
@@ -65,6 +73,7 @@ export interface Session {
   last_edited_at: string | null;
   group_id: string | null;
   is_private: boolean;
+  player_preferences: PlayerPreferences | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,6 +99,7 @@ export interface SessionFormData {
   skill_level: SkillLevel;
   game_type: GameType;
   max_players: number;
+  player_preferences: PlayerPreferences | null;
 }
 
 export interface SessionWithCreator extends Session {
@@ -98,7 +108,7 @@ export interface SessionWithCreator extends Session {
 
 export interface SessionWithParticipants extends SessionWithCreator {
   session_participants: (SessionParticipant & {
-    profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
+    profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level" | "date_of_birth" | "gender">;
   })[];
 }
 
