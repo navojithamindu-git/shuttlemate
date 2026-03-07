@@ -11,7 +11,24 @@ import { CancelSessionButton } from "@/components/sessions/cancel-session-button
 import { EditSessionButton } from "@/components/sessions/edit-session-button";
 import { ConfirmationBanner } from "@/components/sessions/confirmation-banner";
 import { SessionChat } from "@/components/sessions/session-chat";
-import { Calendar, Clock, MapPin, Users } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, UserCheck } from "lucide-react";
+import type { PlayerPreferences } from "@/lib/types/database";
+
+function formatPreferences(prefs: PlayerPreferences): string {
+  const parts: string[] = [];
+  if (prefs.male_slots || prefs.female_slots) {
+    const slots: string[] = [];
+    if (prefs.male_slots) slots.push(`${prefs.male_slots}M`);
+    if (prefs.female_slots) slots.push(`${prefs.female_slots}F`);
+    parts.push(slots.join(" + "));
+  }
+  if (prefs.min_age || prefs.max_age) {
+    if (prefs.min_age && prefs.max_age) parts.push(`Age ${prefs.min_age}–${prefs.max_age}`);
+    else if (prefs.min_age) parts.push(`Age ${prefs.min_age}+`);
+    else if (prefs.max_age) parts.push(`Age up to ${prefs.max_age}`);
+  }
+  return parts.join(" · ");
+}
 import { format } from "date-fns";
 import { TimingBadge } from "@/components/sessions/timing-badge";
 import { Button } from "@/components/ui/button";
@@ -42,7 +59,7 @@ export default async function SessionDetailPage({
         joined_at,
         confirmed,
         confirmation_deadline,
-        profiles(id, full_name, avatar_url, skill_level)
+        profiles(*)
       )
     `
     )
@@ -153,6 +170,15 @@ export default async function SessionDetailPage({
                   </p>
                 </div>
               </div>
+              {session.player_preferences && (
+                <div className="flex items-center gap-3">
+                  <UserCheck className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Host prefers</p>
+                    <p className="font-medium">{formatPreferences(session.player_preferences)}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Separator />
