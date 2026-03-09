@@ -4,7 +4,8 @@
       "Bash(xargs wc -l)",
       "Bash(ls \"C:\\\\Users\\\\Thamindu\\\\.claude\\\\projects\\\\c--Users-Thamindu-Downloads-JH-Litarature-shuttlemates\\\\memory\"\" 2>/dev/null || echo \"Directory does not exist \")",
       "Bash(ls -la /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/app/\\\\\\(sessions\\\\\\)/sessions/)",
-      "Bash(cat /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/app/\\\\\\(sessions\\\\\\)/sessions/[id]/page.tsx)"
+      "Bash(cat /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/app/\\\\\\(sessions\\\\\\)/sessions/[id]/page.tsx)",
+      "Bash(wc -l /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/lib/actions/*.ts)"
     ]
   }
 }
