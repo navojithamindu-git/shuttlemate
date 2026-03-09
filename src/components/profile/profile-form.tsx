@@ -27,9 +27,10 @@ const SKILL_LEVELS: { value: SkillLevel; label: string; desc: string }[] = [
 interface ProfileFormProps {
   profile: Profile | null;
   isOnboarding?: boolean;
+  redirectTo?: string;
 }
 
-export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps) {
+export function ProfileForm({ profile, isOnboarding = false, redirectTo }: ProfileFormProps) {
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [skillLevel, setSkillLevel] = useState<SkillLevel>(
     profile?.skill_level ?? "Beginner"
@@ -77,7 +78,7 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
       setError(updateError.message);
       setLoading(false);
     } else {
-      router.push("/sessions");
+      router.push(redirectTo ?? "/sessions");
       router.refresh();
     }
   };

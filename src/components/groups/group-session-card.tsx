@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { format } from "date-fns";
-import { Calendar, Clock, MapPin, Users, X } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, X, Shuffle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { updateGroupRsvp, cancelGroupSession } from "@/lib/actions/groups";
+import { GenerateMatchupsModal } from "./generate-matchups-modal";
 import type { GroupMember, GroupSessionRsvp, RsvpStatus, Session } from "@/lib/types/database";
 import type { Profile } from "@/lib/types/database";
 
@@ -42,6 +43,7 @@ export function GroupSessionCard({
   const [rsvps, setRsvps] = useState<GroupSessionRsvp[]>(session.group_session_rsvps ?? []);
   const [isPending, startTransition] = useTransition();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [matchupsOpen, setMatchupsOpen] = useState(false);
 
   const myRsvp = rsvps.find((r) => r.user_id === currentUserId)?.status ?? "yes";
 
@@ -83,12 +85,16 @@ export function GroupSessionCard({
     byStatus[status].push(member);
   }
 
+  // RSVP yes player IDs for matchup modal pre-fill
+  const rsvpYesIds = rsvps.filter((r) => r.status === "yes").map((r) => r.user_id);
+
   const sessionDate = new Date(session.date + "T00:00:00");
   const isToday = new Date().toISOString().split("T")[0] === session.date;
   const isTomorrow =
     new Date(Date.now() + 86400000).toISOString().split("T")[0] === session.date;
 
   return (
+    <>
     <Card>
       <CardContent className="pt-4 space-y-4">
         {/* Header */}
@@ -113,11 +119,23 @@ export function GroupSessionCard({
               <span>{session.location}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="flex items-center gap-1 text-sm text-muted-foreground mr-1">
               <Users className="h-4 w-4" />
               {byStatus.yes.length}/{groupMembers.length}
             </span>
+            {canManage && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground"
+                onClick={() => setMatchupsOpen(true)}
+                disabled={isPending}
+                title="Generate matchups"
+              >
+                <Shuffle className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {canManage && !confirmCancel && (
               <Button
                 size="sm"
@@ -189,5 +207,17 @@ export function GroupSessionCard({
         </div>
       </CardContent>
     </Card>
+
+    {canManage && (
+      <GenerateMatchupsModal
+        groupId={session.group_id as string}
+        sessionId={session.id}
+        sessionDate={session.date}
+        rsvpYesIds={rsvpYesIds}
+        open={matchupsOpen}
+        onOpenChange={setMatchupsOpen}
+      />
+    )}
+    </>
   );
 }

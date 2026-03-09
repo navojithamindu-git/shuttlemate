@@ -23,7 +23,11 @@ export async function GET(request: Request) {
           .single();
 
         if (profile && !profile.profile_complete) {
-          return NextResponse.redirect(`${origin}/profile/complete`);
+          const completeUrl =
+            next !== "/sessions"
+              ? `${origin}/profile/complete?next=${encodeURIComponent(next)}`
+              : `${origin}/profile/complete`;
+          return NextResponse.redirect(completeUrl);
         }
       }
 

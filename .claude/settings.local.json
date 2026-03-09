@@ -5,7 +5,10 @@
       "Bash(ls \"C:\\\\Users\\\\Thamindu\\\\.claude\\\\projects\\\\c--Users-Thamindu-Downloads-JH-Litarature-shuttlemates\\\\memory\"\" 2>/dev/null || echo \"Directory does not exist \")",
       "Bash(ls -la /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/app/\\\\\\(sessions\\\\\\)/sessions/)",
       "Bash(cat /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/app/\\\\\\(sessions\\\\\\)/sessions/[id]/page.tsx)",
-      "Bash(wc -l /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/lib/actions/*.ts)"
+      "Bash(wc -l /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/lib/actions/*.ts)",
+      "Bash(gh issue list --limit 10)",
+      "Bash(gh auth status)",
+      "Bash(xargs grep -l \"My Sessions\")"
     ]
   }
 }

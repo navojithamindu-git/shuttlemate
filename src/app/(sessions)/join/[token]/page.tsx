@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import Link from "next/link";
 import { JoinGroupButton } from "@/components/groups/join-group-button";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import type { Metadata } from "next";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -191,12 +192,24 @@ export default async function JoinGroupPage({
             <JoinGroupButton token={token} />
           ) : (
             <div className="space-y-3">
+              <GoogleSignInButton redirectTo={`/join/${token}`} />
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">or</span>
+                </div>
+              </div>
               <Link href={`/login?redirect=/join/${token}`} className="block">
-                <Button className="w-full">Sign in to join</Button>
+                <Button variant="outline" className="w-full">Sign in with email</Button>
               </Link>
-              <Link href={`/signup?redirect=/join/${token}`} className="block">
-                <Button variant="outline" className="w-full">Create an account</Button>
-              </Link>
+              <p className="text-center text-xs text-muted-foreground">
+                No account?{" "}
+                <Link href={`/signup?redirect=/join/${token}`} className="text-primary underline">
+                  Create one
+                </Link>
+              </p>
             </div>
           )}
         </CardContent>

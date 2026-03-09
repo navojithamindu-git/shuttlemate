@@ -5,7 +5,7 @@ import { SessionCard } from "@/components/sessions/session-card";
 import { SessionFilters } from "@/components/sessions/session-filters";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Zap } from "lucide-react";
 
 interface SearchParams {
   city?: string;
@@ -57,10 +57,20 @@ export default async function SessionsPage({
 
   const { data: sessions } = await query;
 
+  const sessionCount = sessions?.length ?? 0;
+
   return (
     <div className="container mx-auto py-6 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Find Sessions</h1>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <h1 className="text-3xl font-bold">Find Sessions</h1>
+          {sessionCount > 0 && (
+            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+              {sessionCount} session{sessionCount !== 1 ? "s" : ""} available now
+            </p>
+          )}
+        </div>
         {user ? (
           <Link href="/sessions/new">
             <Button>
@@ -75,20 +85,28 @@ export default async function SessionsPage({
         )}
       </div>
 
+      <div className="mb-6" />
       <SessionFilters currentFilters={params} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6">
         {sessions?.map((session) => (
           <SessionCard key={session.id} session={session} />
         ))}
-        {(!sessions || sessions.length === 0) && (
+        {sessionCount === 0 && (
           <div className="col-span-full text-center py-16">
-            <p className="text-muted-foreground text-lg mb-4">
-              No sessions found
+            <p className="text-4xl mb-3">🏸</p>
+            <p className="text-lg font-semibold mb-1">No sessions found</p>
+            <p className="text-muted-foreground text-sm mb-6">
+              {params.city || params.skill_level || params.game_type
+                ? "Try adjusting your filters — there may be sessions in nearby areas."
+                : "Be the first to put one together."}
             </p>
             {user ? (
               <Link href="/sessions/new">
-                <Button>Be the first to create one</Button>
+                <Button className="gap-2">
+                  <Zap className="h-4 w-4" />
+                  Create a session
+                </Button>
               </Link>
             ) : (
               <Link href="/signup">
