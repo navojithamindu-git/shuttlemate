@@ -18,14 +18,15 @@ export default async function MySessionsPage() {
 
   if (!user) redirect("/login");
 
-  // Sessions I created
+  // Sessions I created (exclude group sessions — those live in My Groups)
   const { data: createdSessions } = await supabase
     .from("sessions")
     .select(`*, session_participants(count)`)
     .eq("creator_id", user.id)
+    .is("group_id", null)
     .order("date", { ascending: true });
 
-  // Sessions I joined (but didn't create)
+  // Sessions I joined (but didn't create, and not group sessions)
   const { data: joinedData } = await supabase
     .from("session_participants")
     .select("session_id")
@@ -40,6 +41,7 @@ export default async function MySessionsPage() {
       .select(`*, session_participants(count)`)
       .in("id", joinedSessionIds)
       .neq("creator_id", user.id)
+      .is("group_id", null)
       .order("date", { ascending: true });
     joinedSessions = data;
   }

@@ -12,6 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 
+const SKILL_COLORS: Record<string, string> = {
+  Beginner: "border-l-emerald-500",
+  Intermediate: "border-l-blue-500",
+  Advanced: "border-l-orange-500",
+  Open: "border-l-purple-500",
+};
+
 interface SessionCardProps {
   session: {
     id: string;
@@ -45,10 +52,12 @@ export function SessionCard({ session }: SessionCardProps) {
   const participantCount = session.session_participants?.[0]?.count ?? 0;
   const timing = getTimingBadge(session.date, session.start_time);
   const isFull = session.status === "full" || participantCount >= session.max_players;
+  const spotsLeft = session.max_players - participantCount;
+  const borderColor = SKILL_COLORS[session.skill_level] ?? "border-l-primary";
 
   return (
     <Link href={`/sessions/${session.id}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+      <Card className={`hover:shadow-md transition-shadow cursor-pointer h-full border-l-4 ${borderColor}`}>
         <CardHeader className="pb-3">
           <div className="flex gap-2 mb-2 flex-wrap">
             <Badge variant="secondary">{session.skill_level}</Badge>
@@ -84,13 +93,19 @@ export function SessionCard({ session }: SessionCardProps) {
             </span>
           </div>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex flex-col items-start gap-2 pt-0">
+          <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${isFull ? "bg-destructive" : "bg-emerald-500"}`}
+              style={{ width: `${Math.min((participantCount / session.max_players) * 100, 100)}%` }}
+            />
+          </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Users className="h-4 w-4" />
             <span>
               {isFull
-                ? `${participantCount} players · Full`
-                : `${participantCount} joined · need ${session.max_players - participantCount} more`}
+                ? `${participantCount}/${session.max_players} · Full`
+                : `${participantCount}/${session.max_players} joined · ${spotsLeft} spot${spotsLeft !== 1 ? "s" : ""} left`}
             </span>
           </div>
         </CardFooter>
