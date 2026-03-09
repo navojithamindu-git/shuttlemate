@@ -594,7 +594,7 @@ export async function getGroupMembersForMatchups(groupId: string): Promise<Membe
   const statsMap = new Map(stats?.map((s) => [s.player_id, s]) ?? []);
 
   return (members ?? []).map((m) => {
-    const profile = m.profiles as { id: string; full_name: string | null; avatar_url: string | null } | null;
+    const profile = m.profiles as unknown as { id: string; full_name: string | null; avatar_url: string | null } | null;
     const stat = statsMap.get(m.user_id);
     return {
       user_id: m.user_id,
