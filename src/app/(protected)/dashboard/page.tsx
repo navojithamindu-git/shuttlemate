@@ -213,7 +213,7 @@ export default async function DashboardPage() {
 
   const groupMap = new Map(
     (myMemberships ?? []).map((m) => {
-      const g = m.recurring_groups as { id: string; name: string } | null;
+      const g = m.recurring_groups as unknown as { id: string; name: string } | null;
       return [m.group_id, { name: g?.name ?? "Group", role: m.role as string }];
     }),
   );
