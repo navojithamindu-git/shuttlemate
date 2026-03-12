@@ -13,6 +13,7 @@ export interface Profile {
   bio: string | null;
   avatar_url: string | null;
   date_of_birth: string | null;
+  weight_kg: number | null;
   profile_complete: boolean;
   created_at: string;
   updated_at: string;
