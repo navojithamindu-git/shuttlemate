@@ -8,7 +8,9 @@
       "Bash(wc -l /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src/lib/actions/*.ts)",
       "Bash(gh issue list --limit 10)",
       "Bash(gh auth status)",
-      "Bash(xargs grep -l \"My Sessions\")"
+      "Bash(xargs grep -l \"My Sessions\")",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

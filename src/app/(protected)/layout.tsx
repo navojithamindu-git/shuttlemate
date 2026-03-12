@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Navbar } from "@/components/layout/navbar";
+import { PushNotificationPrompt } from "@/components/layout/push-notification-prompt";
 
 export default async function ProtectedLayout({
   children,
@@ -33,8 +34,10 @@ export default async function ProtectedLayout({
         userName={profile?.full_name ?? null}
         avatarUrl={profile?.avatar_url ?? null}
         unreadMessageCount={unreadCount ?? 0}
+        isAuthenticated={true}
       />
       <main className="flex-1">{children}</main>
+      <PushNotificationPrompt />
     </div>
   );
 }

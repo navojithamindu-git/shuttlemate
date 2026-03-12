@@ -219,7 +219,12 @@ export default async function GroupDetailPage({
         <TabsContent value="chat" className="mt-4">
           <Card className="overflow-hidden">
             <div className="h-[calc(100vh-20rem)] flex flex-col">
-              <GroupChat groupId={id} currentUserId={user.id} />
+              <GroupChat
+                groupId={id}
+                currentUserId={user.id}
+                currentUserName={currentMember?.profiles?.full_name ?? null}
+                members={group.group_members as any[]}
+              />
             </div>
           </Card>
         </TabsContent>

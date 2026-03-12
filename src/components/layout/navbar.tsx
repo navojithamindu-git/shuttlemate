@@ -21,7 +21,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { Menu, LogOut, User, Calendar, Plus, MessageCircle, Clock, Sun, Moon, Users } from "lucide-react";
+import { Menu, LogOut, User, Calendar, MessageCircle, Sun, Moon, Users, LayoutDashboard, Clock, ListChecks } from "lucide-react";
 
 interface NavbarProps {
   userName: string | null;
@@ -58,18 +58,16 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
   const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
 
   const navLinks = [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/sessions", label: "Find Sessions", icon: Calendar },
-    { href: "/sessions/new", label: "Create Session", icon: Plus },
-    { href: "/my-sessions", label: "My Sessions", icon: Calendar },
     { href: "/groups", label: "My Groups", icon: Users },
-    { href: "/availability", label: "Availability", icon: Clock },
     { href: "/messages", label: "Messages", icon: MessageCircle },
   ];
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <Link href="/" className="font-bold text-lg">
+        <Link href={isAuthenticated ? "/dashboard" : "/"} className="font-bold text-lg">
           ShuttleMates
         </Link>
 
@@ -106,7 +104,7 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                      <AvatarFallback className="text-xs bg-primary text-primary-foreground">{initials}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -115,6 +113,18 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
                     <Link href="/profile" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/my-sessions" className="cursor-pointer">
+                      <ListChecks className="mr-2 h-4 w-4" />
+                      My Sessions
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/availability" className="cursor-pointer">
+                      <Clock className="mr-2 h-4 w-4" />
+                      Availability
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -190,6 +200,22 @@ export function Navbar({ userName, avatarUrl, unreadMessageCount = 0, isAuthenti
                   >
                     <User className="h-4 w-4" />
                     Profile
+                  </Link>
+                  <Link
+                    href="/my-sessions"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <ListChecks className="h-4 w-4" />
+                    My Sessions
+                  </Link>
+                  <Link
+                    href="/availability"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <Clock className="h-4 w-4" />
+                    Availability
                   </Link>
                   <button
                     onClick={toggleTheme}
