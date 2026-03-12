@@ -50,6 +50,8 @@
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
+  --texture-line: rgba(0, 0, 0, 0.028);
+  --texture-dot: rgba(0, 0, 0, 0.07);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -84,6 +86,8 @@
 
 .dark {
   --background: oklch(0.145 0 0);
+  --texture-line: rgba(255, 255, 255, 0.04);
+  --texture-dot: rgba(255, 255, 255, 0.055);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -171,4 +175,21 @@
 .hero-grid {
   background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
   background-size: 32px 32px;
+}
+
+/* ── Chat wallpaper: fine diagonal stripe ─────── */
+.chat-texture {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0px,
+    transparent 10px,
+    var(--texture-line) 10px,
+    var(--texture-line) 11px
+  );
+}
+
+/* ── Page background: subtle dot grid ────────── */
+.page-texture {
+  background-image: radial-gradient(circle, var(--texture-dot) 1px, transparent 1px);
+  background-size: 26px 26px;
 }

@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 
+const MAX_MESSAGE_LENGTH = 2000;
+
 export async function sendSessionMessage(sessionId: string, content: string) {
   const supabase = await createClient();
   const {
@@ -15,6 +17,8 @@ export async function sendSessionMessage(sessionId: string, content: string) {
 
   const trimmed = content.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase.from("session_messages").insert({
     session_id: sessionId,
@@ -37,6 +41,8 @@ export async function sendDirectMessage(receiverId: string, content: string) {
 
   const trimmed = content.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase.from("direct_messages").insert({
     sender_id: user.id,
@@ -60,6 +66,16 @@ export async function editDirectMessage(messageId: string, newContent: string) {
 
   const trimmed = newContent.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
+
+  // Fetch receiver before update so we can revalidate their conversation path
+  const { data: existing } = await supabase
+    .from("direct_messages")
+    .select("receiver_id")
+    .eq("id", messageId)
+    .eq("sender_id", user.id)
+    .single();
 
   const { error } = await supabase
     .from("direct_messages")
@@ -70,6 +86,7 @@ export async function editDirectMessage(messageId: string, newContent: string) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/messages");
+  if (existing) revalidatePath(`/messages/${existing.receiver_id}`);
 }
 
 export async function deleteDirectMessage(messageId: string) {
@@ -93,7 +110,8 @@ export async function deleteDirectMessage(messageId: string) {
 
 export async function editSessionMessage(
   messageId: string,
-  newContent: string
+  newContent: string,
+  sessionId: string
 ) {
   const supabase = await createClient();
   const {
@@ -104,6 +122,8 @@ export async function editSessionMessage(
 
   const trimmed = newContent.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase
     .from("session_messages")
@@ -112,9 +132,11 @@ export async function editSessionMessage(
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
+
+  revalidatePath(`/sessions/${sessionId}`);
 }
 
-export async function deleteSessionMessage(messageId: string) {
+export async function deleteSessionMessage(messageId: string, sessionId: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -129,6 +151,8 @@ export async function deleteSessionMessage(messageId: string) {
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
+
+  revalidatePath(`/sessions/${sessionId}`);
 }
 
 export async function sendGroupMessage(
@@ -145,6 +169,8 @@ export async function sendGroupMessage(
 
   const trimmed = content.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase.from("group_messages").insert({
     group_id: groupId,
@@ -220,7 +246,11 @@ export async function sendGroupMessage(
   });
 }
 
-export async function editGroupMessage(messageId: string, newContent: string) {
+export async function editGroupMessage(
+  messageId: string,
+  newContent: string,
+  groupId: string
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -230,6 +260,8 @@ export async function editGroupMessage(messageId: string, newContent: string) {
 
   const trimmed = newContent.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase
     .from("group_messages")
@@ -238,9 +270,11 @@ export async function editGroupMessage(messageId: string, newContent: string) {
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
+
+  revalidatePath(`/groups/${groupId}`);
 }
 
-export async function deleteGroupMessage(messageId: string) {
+export async function deleteGroupMessage(messageId: string, groupId: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -255,6 +289,8 @@ export async function deleteGroupMessage(messageId: string) {
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
+
+  revalidatePath(`/groups/${groupId}`);
 }
 
 export async function toggleReaction(
