@@ -91,7 +91,7 @@ export default async function DashboardPage() {
       .from("group_session_rsvps")
       .select("sessions!inner(id, date, start_time, end_time, game_type, status)")
       .eq("user_id", user.id)
-      .eq("status", "going")
+      .eq("status", "yes")
       .gte("sessions.date", weekStartStr)
       .lte("sessions.date", today)
       .neq("sessions.status", "cancelled"),
@@ -115,7 +115,7 @@ export default async function DashboardPage() {
       .from("group_session_rsvps")
       .select("sessions!inner(date, status)")
       .eq("user_id", user.id)
-      .eq("status", "going")
+      .eq("status", "yes")
       .gte("sessions.date", threeMonthsAgoStr)
       .lte("sessions.date", today)
       .neq("sessions.status", "cancelled"),
