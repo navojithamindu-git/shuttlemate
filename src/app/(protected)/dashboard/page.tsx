@@ -198,7 +198,7 @@ export default async function DashboardPage() {
   const weekStreak = calcStreak([...new Set(allSessionDates)], now);
 
   const recentForm = (recentMatchPlayers ?? [])
-    .filter((mp) => (mp.matches as { status: string } | null)?.status === "completed")
+    .filter((mp) => (mp.matches as unknown as { status: string } | null)?.status === "completed")
     .slice(0, 5);
 
   const unlockedAchievements: Achievement[] = [];
