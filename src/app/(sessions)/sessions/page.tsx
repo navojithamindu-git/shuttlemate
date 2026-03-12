@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { cleanupExpiredSessions, cleanupUnconfirmedParticipants } from "@/lib/actions/sessions";
 import { SessionCard } from "@/components/sessions/session-card";
 import { SessionFilters } from "@/components/sessions/session-filters";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus, Zap } from "lucide-react";
@@ -56,39 +57,35 @@ export default async function SessionsPage({
   if (params.game_type) query = query.eq("game_type", params.game_type);
 
   const { data: sessions } = await query;
-
   const sessionCount = sessions?.length ?? 0;
+  const isFiltered = !!(params.city || params.skill_level || params.game_type);
 
   return (
-    <div className="container mx-auto py-6 px-4">
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <h1 className="text-3xl font-bold">Find Sessions</h1>
-          {sessionCount > 0 && (
-            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-              {sessionCount} session{sessionCount !== 1 ? "s" : ""} available now
-            </p>
-          )}
-        </div>
-        {user ? (
-          <Link href="/sessions/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Session
-            </Button>
-          </Link>
-        ) : (
-          <Link href="/signup">
-            <Button variant="outline">Sign up to create</Button>
-          </Link>
-        )}
-      </div>
+    <div>
+      <PageHeader
+        title="Find Sessions"
+        subtitle="Browse open badminton sessions near you and join a game."
+        badge={sessionCount > 0 ? `${sessionCount} session${sessionCount !== 1 ? "s" : ""} available` : undefined}
+        action={
+          user ? (
+            <Link href="/sessions/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Session
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/signup">
+              <Button variant="outline">Sign up to create</Button>
+            </Link>
+          )
+        }
+      />
 
-      <div className="mb-6" />
-      <SessionFilters currentFilters={params} />
+      <div className="container mx-auto py-6 px-4">
+        <SessionFilters currentFilters={params} />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6">
         {sessions?.map((session) => (
           <SessionCard key={session.id} session={session} />
         ))}
@@ -97,7 +94,7 @@ export default async function SessionsPage({
             <p className="text-4xl mb-3">🏸</p>
             <p className="text-lg font-semibold mb-1">No sessions found</p>
             <p className="text-muted-foreground text-sm mb-6">
-              {params.city || params.skill_level || params.game_type
+              {isFiltered
                 ? "Try adjusting your filters — there may be sessions in nearby areas."
                 : "Be the first to put one together."}
             </p>
@@ -115,6 +112,7 @@ export default async function SessionsPage({
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

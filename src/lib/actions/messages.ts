@@ -1,7 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 export async function sendSessionMessage(sessionId: string, content: string) {
   const supabase = await createClient();
@@ -129,7 +131,11 @@ export async function deleteSessionMessage(messageId: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function sendGroupMessage(groupId: string, content: string) {
+export async function sendGroupMessage(
+  groupId: string,
+  content: string,
+  mentionedUserIds?: string[]
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -149,6 +155,69 @@ export async function sendGroupMessage(groupId: string, content: string) {
   if (error) throw new Error(error.message);
 
   revalidatePath(`/groups/${groupId}`);
+
+  // Send push notifications in background
+  after(async () => {
+    try {
+      const admin = createAdminClient();
+
+      const [{ data: sender }, { data: group }, { data: members }] =
+        await Promise.all([
+          admin
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .single(),
+          admin
+            .from("recurring_groups")
+            .select("name")
+            .eq("id", groupId)
+            .single(),
+          admin
+            .from("group_members")
+            .select("user_id")
+            .eq("group_id", groupId)
+            .neq("user_id", user.id),
+        ]);
+
+      if (!members || members.length === 0) return;
+
+      const senderName = sender?.full_name ?? "Someone";
+      const groupName = group?.name ?? "ShuttleMates";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const url = `${appUrl}/groups/${groupId}`;
+      const preview = trimmed.length > 80 ? trimmed.slice(0, 77) + "..." : trimmed;
+
+      const allMemberIds = members.map((m) => m.user_id);
+      const mentionedIds = (mentionedUserIds ?? []).filter(
+        (id) => id !== user.id
+      );
+      const otherIds = allMemberIds.filter((id) => !mentionedIds.includes(id));
+
+      const { sendPushToUsers } = await import("@/lib/actions/push");
+
+      await Promise.all([
+        mentionedIds.length > 0
+          ? sendPushToUsers(mentionedIds, {
+              title: `${senderName} mentioned you in ${groupName}`,
+              body: preview,
+              url,
+              tag: `group-mention-${groupId}`,
+            })
+          : Promise.resolve(),
+        otherIds.length > 0
+          ? sendPushToUsers(otherIds, {
+              title: groupName,
+              body: `${senderName}: ${preview}`,
+              url,
+              tag: `group-chat-${groupId}`,
+            })
+          : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error("Failed to send push notifications:", err);
+    }
+  });
 }
 
 export async function editGroupMessage(messageId: string, newContent: string) {

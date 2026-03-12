@@ -48,12 +48,46 @@ interface Message {
   };
 }
 
+interface Member {
+  user_id: string;
+  profiles: {
+    full_name: string | null;
+    avatar_url: string | null;
+  } | null;
+}
+
 interface GroupChatProps {
   groupId: string;
   currentUserId: string;
+  currentUserName: string | null;
+  members: Member[];
 }
 
-export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
+/** Render message content, highlighting @mentions */
+function renderContent(content: string, currentUserName: string | null) {
+  const parts = content.split(/(@\S+)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("@")) {
+      const isMe = currentUserName && part === `@${currentUserName}`;
+      return (
+        <span
+          key={i}
+          className={`font-semibold ${isMe ? "text-emerald-500" : "text-blue-500"}`}
+        >
+          {part}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+export function GroupChat({
+  groupId,
+  currentUserId,
+  currentUserName,
+  members,
+}: GroupChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -63,6 +97,11 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
   const [showInputEmoji, setShowInputEmoji] = useState(false);
+
+  // @mention state
+  const [mentionSearch, setMentionSearch] = useState<string | null>(null);
+  const [mentionedUserIds, setMentionedUserIds] = useState<Set<string>>(new Set());
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -231,12 +270,48 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
     if (editingId && editInputRef.current) editInputRef.current.focus();
   }, [editingId]);
 
+  // Detect @mention trigger in the input
+  const handleInputChange = (value: string) => {
+    setNewMessage(value);
+
+    // Find active @mention at end of string: last @ not followed by a space
+    const match = value.match(/@([^\s]*)$/);
+    if (match) {
+      setMentionSearch(match[1]);
+    } else {
+      setMentionSearch(null);
+    }
+  };
+
+  const filteredMembers = mentionSearch !== null
+    ? members.filter((m) => {
+        const name = m.profiles?.full_name ?? "";
+        return (
+          m.user_id !== currentUserId &&
+          name.toLowerCase().includes(mentionSearch.toLowerCase())
+        );
+      })
+    : [];
+
+  const handleMentionSelect = (member: Member) => {
+    const name = member.profiles?.full_name ?? "";
+    // Replace the @partial with @FullName
+    const updated = newMessage.replace(/@([^\s]*)$/, `@${name} `);
+    setNewMessage(updated);
+    setMentionSearch(null);
+    setMentionedUserIds((prev) => new Set([...prev, member.user_id]));
+    inputRef.current?.focus();
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
 
     const content = newMessage.trim();
+    const mentionIds = Array.from(mentionedUserIds);
     setNewMessage("");
+    setMentionSearch(null);
+    setMentionedUserIds(new Set());
     setSending(true);
 
     const tempId = `temp-${Date.now()}`;
@@ -250,7 +325,7 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
     setMessages((prev) => [...prev, optimisticMsg]);
 
     try {
-      await sendGroupMessage(groupId, content);
+      await sendGroupMessage(groupId, content, mentionIds);
       const supabase = createClient();
       const { data: latest } = await supabase
         .from("group_messages")
@@ -349,7 +424,11 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
 
   const getInitials = (name: string | null) =>
     name
-      ? name.split(" ").map((n) => n[0]).join("").toUpperCase()
+      ? name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
       : "?";
 
   const getGroupedReactions = (messageId: string) => {
@@ -364,10 +443,11 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
   };
 
   const isAnyPickerOpen = emojiPickerMsgId !== null || showInputEmoji;
+  const showMentionMenu = mentionSearch !== null && filteredMembers.length > 0;
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Dismiss overlay */}
+      {/* Dismiss overlay for emoji pickers */}
       {isAnyPickerOpen && (
         <div
           className="fixed inset-0 z-40"
@@ -436,7 +516,9 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => setEmojiPickerMsgId(emojiPickerMsgId === msg.id ? null : msg.id)}
+                      onClick={() =>
+                        setEmojiPickerMsgId(emojiPickerMsgId === msg.id ? null : msg.id)
+                      }
                     >
                       <Smile className="h-3.5 w-3.5" />
                     </Button>
@@ -446,7 +528,10 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => { setEditingId(msg.id); setEditContent(msg.content); }}
+                          onClick={() => {
+                            setEditingId(msg.id);
+                            setEditContent(msg.content);
+                          }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -465,9 +550,13 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
 
                 {/* Emoji picker */}
                 {emojiPickerMsgId === msg.id && (
-                  <div className={`absolute bottom-full mb-1 z-50 ${isOwn ? "right-0" : "left-0"}`}>
+                  <div
+                    className={`absolute bottom-full mb-1 z-50 ${isOwn ? "right-0" : "left-0"}`}
+                  >
                     <EmojiPicker
-                      onEmojiSelect={(emoji: { native: string }) => handleReaction(msg.id, emoji.native)}
+                      onEmojiSelect={(emoji: { native: string }) =>
+                        handleReaction(msg.id, emoji.native)
+                      }
                       theme="auto"
                       previewPosition="none"
                       skinTonePosition="none"
@@ -488,20 +577,40 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                       onChange={(e) => setEditContent(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleEdit(msg.id);
-                        if (e.key === "Escape") { setEditingId(null); setEditContent(""); }
+                        if (e.key === "Escape") {
+                          setEditingId(null);
+                          setEditContent("");
+                        }
                       }}
                       className="text-sm h-8"
                     />
-                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => handleEdit(msg.id)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => handleEdit(msg.id)}
+                    >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => { setEditingId(null); setEditContent(""); }}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditContent("");
+                      }}
+                    >
                       <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ) : (
-                  <div className={`rounded-lg px-3 py-1.5 text-sm ${isOwn ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-                    {msg.content}
+                  <div
+                    className={`rounded-lg px-3 py-1.5 text-sm ${
+                      isOwn ? "bg-primary text-primary-foreground" : "bg-muted"
+                    }`}
+                  >
+                    {renderContent(msg.content, currentUserName)}
                   </div>
                 )}
 
@@ -513,7 +622,9 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                         key={r.emoji}
                         onClick={() => handleReaction(msg.id, r.emoji)}
                         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors ${
-                          r.userReacted ? "bg-primary/10 border-primary/30" : "bg-muted border-transparent hover:border-border"
+                          r.userReacted
+                            ? "bg-primary/10 border-primary/30"
+                            : "bg-muted border-transparent hover:border-border"
                         }`}
                       >
                         <span>{r.emoji}</span>
@@ -527,7 +638,9 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                 {!isEditing && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-                    {msg.is_edited && !msg.is_deleted && <span className="ml-1">(edited)</span>}
+                    {msg.is_edited && !msg.is_deleted && (
+                      <span className="ml-1">(edited)</span>
+                    )}
                   </p>
                 )}
               </div>
@@ -539,6 +652,30 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
 
       {/* Input */}
       <div className="p-4 border-t bg-background relative">
+        {/* @mention dropdown */}
+        {showMentionMenu && (
+          <div className="absolute bottom-full left-4 right-4 mb-1 z-50 bg-background border rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+            {filteredMembers.map((member) => (
+              <button
+                key={member.user_id}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left transition-colors"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // prevent input blur before click
+                  handleMentionSelect(member);
+                }}
+              >
+                <Avatar className="h-6 w-6 shrink-0">
+                  <AvatarImage src={member.profiles?.avatar_url ?? undefined} />
+                  <AvatarFallback className="text-[10px]">
+                    {getInitials(member.profiles?.full_name ?? null)}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{member.profiles?.full_name ?? "Unknown"}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {showInputEmoji && (
           <div className="absolute bottom-full mb-2 left-4 z-50">
             <EmojiPicker
@@ -566,8 +703,11 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
           <Input
             ref={inputRef}
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Message the group..."
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setMentionSearch(null);
+            }}
+            placeholder="Message the group... (type @ to mention)"
             disabled={sending}
           />
           <Button type="submit" size="icon" disabled={sending || !newMessage.trim()}>

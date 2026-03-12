@@ -41,6 +41,9 @@ export function ProfileForm({ profile, isOnboarding = false, redirectTo }: Profi
     profile?.city ? profile.city.split(", ").filter(Boolean) : []
   );
   const [bio, setBio] = useState(profile?.bio ?? "");
+  const [weightKg, setWeightKg] = useState<string>(
+    profile?.weight_kg ? String(profile.weight_kg) : ""
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -70,6 +73,7 @@ export function ProfileForm({ profile, isOnboarding = false, redirectTo }: Profi
         date_of_birth: dateOfBirth || null,
         city: cities.join(", "),
         bio,
+        weight_kg: weightKg ? parseInt(weightKg) : null,
         profile_complete: true,
       })
       .eq("id", user.id);
@@ -165,6 +169,24 @@ export function ProfileForm({ profile, isOnboarding = false, redirectTo }: Profi
           placeholder="Playing style, availability, what you're looking for..."
           rows={3}
         />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="weightKg">
+          Weight{" "}
+          <span className="text-muted-foreground font-normal text-xs">(optional — used to estimate calories burned)</span>
+        </Label>
+        <div className="flex items-center gap-2 max-w-[160px]">
+          <Input
+            id="weightKg"
+            type="number"
+            min={30}
+            max={200}
+            value={weightKg}
+            onChange={(e) => setWeightKg(e.target.value)}
+            placeholder="e.g. 70"
+          />
+          <span className="text-sm text-muted-foreground shrink-0">kg</span>
+        </div>
       </div>
       <Button type="submit" className="w-full" disabled={loading}>
         {loading

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/sessions";
+  const next = searchParams.get("next") ?? "/dashboard";
 
   if (code) {
     const supabase = await createClient();
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
         if (profile && !profile.profile_complete) {
           const completeUrl =
-            next !== "/sessions"
+            next !== "/dashboard"
               ? `${origin}/profile/complete?next=${encodeURIComponent(next)}`
               : `${origin}/profile/complete`;
           return NextResponse.redirect(completeUrl);

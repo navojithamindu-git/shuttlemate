@@ -7,28 +7,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { format } from "date-fns";
 import type { GameType, RsvpStatus, SkillLevel } from "@/lib/types/database";
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Returns the next `count` future dates that fall on `dayOfWeek` (0=Sun, 6=Sat),
- *  starting strictly after `afterDate` (defaults to today). */
-function getNextOccurrences(
-  dayOfWeek: number,
-  count: number,
-  afterDate?: Date
-): Date[] {
-  const dates: Date[] = [];
-  const cursor = afterDate ? new Date(afterDate) : new Date();
-  cursor.setHours(0, 0, 0, 0);
-
-  while (dates.length < count) {
-    cursor.setDate(cursor.getDate() + 1);
-    if (cursor.getDay() === dayOfWeek) {
-      dates.push(new Date(cursor));
-    }
-  }
-  return dates;
-}
+import { getNextOccurrences } from "@/lib/utils/session-utils";
 
 // ─── Create group ────────────────────────────────────────────────────────────
 
@@ -145,7 +124,13 @@ export async function generateGroupSessions(
 
   for (let i = 0; i < newDates.length; i++) {
     const date = newDates[i];
-    const dateStr = date.toISOString().split("T")[0];
+    // Use local date parts — toISOString() would shift to UTC and give the wrong day
+    // in timezones ahead of UTC (e.g. UTC+5:30 → Friday midnight = Thursday in UTC)
+    const dateStr = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
     const isFirst = i === 0;
 
     // Insert the session
