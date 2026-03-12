@@ -29,7 +29,7 @@ export default async function ProtectedLayout({
   ]);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col page-texture">
       <Navbar
         userName={profile?.full_name ?? null}
         avatarUrl={profile?.avatar_url ?? null}

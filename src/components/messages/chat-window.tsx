@@ -11,8 +11,9 @@ import {
 } from "@/lib/actions/messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send, ArrowLeft, Pencil, Trash2, Smile, X, Check } from "lucide-react";
+import { Send, ArrowLeft, Pencil, Trash2, Smile, X, Check, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
@@ -71,9 +72,19 @@ export function ChatWindow({
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
   const [showInputEmoji, setShowInputEmoji] = useState(false);
+  const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [newMsgCount, setNewMsgCount] = useState(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
+  const hasInitialScrolledRef = useRef(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchMessages = useCallback(async () => {
     const supabase = createClient();
@@ -128,7 +139,7 @@ export function ChatWindow({
     markDirectMessagesAsRead(otherUserId).catch(() => {});
   }, [fetchMessages, otherUserId]);
 
-  // Realtime subscription
+  // Realtime subscription + presence for typing indicator
   useEffect(() => {
     const supabase = createClient();
 
@@ -234,16 +245,33 @@ export function ChatWindow({
           });
         }
       )
-      .subscribe();
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{
+          userId: string;
+          typing: boolean;
+        }>();
+        const isOtherTyping = Object.values(state)
+          .flat()
+          .some((p) => p.userId === otherUserId && p.typing);
+        setOtherUserTyping(isOtherTyping);
+      })
+      .subscribe(async (status: string) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ userId: currentUserId, typing: false });
+        }
+      });
+
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, [currentUserId, otherUserId]);
 
-  // Polling fallback + visibility refetch (ensures messages update even if realtime fails)
+  // Polling fallback + visibility refetch (30s — realtime is primary, polling is safety net)
   useEffect(() => {
-    const pollInterval = setInterval(fetchMessages, 5000);
+    const pollInterval = setInterval(fetchMessages, 30000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -258,9 +286,43 @@ export function ChatWindow({
     };
   }, [fetchMessages]);
 
-  // Auto-scroll
+  // Track scroll position for jump-to-bottom button
   useEffect(() => {
-    scrollToBottom();
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      setIsScrolledUp(!nearBottom);
+      if (nearBottom) setNewMsgCount(0);
+    };
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Auto-scroll: instant jump on initial load, smart scroll for new messages
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    if (!hasInitialScrolledRef.current) {
+      messagesEndRef.current?.scrollIntoView();
+      hasInitialScrolledRef.current = true;
+      prevMessageCountRef.current = messages.length;
+      return;
+    }
+
+    if (messages.length > prevMessageCountRef.current) {
+      const el = scrollContainerRef.current;
+      if (el) {
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        if (isNearBottom) {
+          scrollToBottom();
+        } else {
+          setNewMsgCount((c) => c + (messages.length - prevMessageCountRef.current));
+        }
+      }
+    }
+
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   // Focus edit input
@@ -270,6 +332,12 @@ export function ChatWindow({
     }
   }, [editingId]);
 
+  const handleScrollToBottom = () => {
+    scrollToBottom();
+    setNewMsgCount(0);
+    setIsScrolledUp(false);
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
@@ -277,6 +345,10 @@ export function ChatWindow({
     const content = newMessage.trim();
     setNewMessage("");
     setSending(true);
+
+    // Clear typing indicator immediately on send
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    channelRef.current?.track({ userId: currentUserId, typing: false });
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg: Message = {
@@ -360,7 +432,6 @@ export function ChatWindow({
 
   const handleReaction = useCallback(
     async (messageId: string, emoji: string) => {
-      // Optimistic update
       const tempReaction: Reaction = {
         id: `temp-${Date.now()}`,
         user_id: currentUserId,
@@ -375,7 +446,6 @@ export function ChatWindow({
       );
 
       if (userExisting) {
-        // Optimistically remove
         setReactions((prev) => {
           const updated = (prev[messageId] || []).filter(
             (r) => r.id !== userExisting.id
@@ -388,7 +458,6 @@ export function ChatWindow({
           return { ...prev, [messageId]: updated };
         });
       } else {
-        // Optimistically add
         setReactions((prev) => ({
           ...prev,
           [messageId]: [...(prev[messageId] || []), tempReaction],
@@ -400,7 +469,6 @@ export function ChatWindow({
       try {
         await toggleReaction("direct", messageId, emoji);
       } catch (err) {
-        // Revert on error
         if (userExisting) {
           setReactions((prev) => ({
             ...prev,
@@ -434,6 +502,16 @@ export function ChatWindow({
       .join("")
       .toUpperCase();
 
+  const formatDateLabel = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return "Today";
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  };
+
   const getGroupedReactions = (messageId: string) => {
     const msgReactions = reactions[messageId] || [];
     const grouped: Record<string, { emoji: string; count: number; userReacted: boolean }> = {};
@@ -447,11 +525,11 @@ export function ChatWindow({
     return Object.values(grouped);
   };
 
-  // Determine which picker is open (message reaction or input)
   const isAnyPickerOpen = emojiPickerMsgId !== null || showInputEmoji;
+  const charsLeft = 2000 - newMessage.length;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b">
         {showBackButton && (
@@ -467,11 +545,18 @@ export function ChatWindow({
             {getInitials(otherUserName)}
           </AvatarFallback>
         </Avatar>
-        <p className="font-medium text-sm">{otherUserName}</p>
+        <div>
+          <p className="font-medium text-sm leading-tight">{otherUserName}</p>
+          {otherUserTyping && (
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 italic">
+              typing...
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-0 chat-texture">
         {loading && (
           <p className="text-sm text-muted-foreground text-center py-8">
             Loading messages...
@@ -482,15 +567,36 @@ export function ChatWindow({
             No messages yet. Say hello!
           </p>
         )}
-        {messages.map((msg) => {
+        {messages.map((msg, index) => {
+          const prevMsg = messages[index - 1];
+          const isGrouped =
+            !!prevMsg &&
+            prevMsg.sender_id === msg.sender_id &&
+            !msg.id.startsWith("temp-") &&
+            new Date(msg.created_at).getTime() -
+              new Date(prevMsg.created_at).getTime() <
+              2 * 60 * 1000;
+
+          const msgDate = new Date(msg.created_at).toDateString();
+          const prevMsgDate = prevMsg ? new Date(prevMsg.created_at).toDateString() : null;
+          const showDateSeparator = msgDate !== prevMsgDate;
+
           const isOwn = msg.sender_id === currentUserId;
           const isEditing = editingId === msg.id;
           const grouped = getGroupedReactions(msg.id);
+          const isSending = msg.id.startsWith("temp-");
 
           return (
+            <div key={msg.id}>
+              {showDateSeparator && (
+                <div className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{formatDateLabel(msg.created_at)}</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              )}
             <div
-              key={msg.id}
-              className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+              className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isGrouped ? "mt-0.5" : "mt-3"} ${isSending ? "opacity-60" : ""}`}
               onMouseEnter={() => setHoveredId(msg.id)}
               onMouseLeave={() => setHoveredId(null)}
             >
@@ -543,21 +649,21 @@ export function ChatWindow({
                     </div>
                   )}
 
-                {/* Message-level emoji picker (rendered only for active message) */}
+                {/* Message-level emoji picker */}
                 {emojiPickerMsgId === msg.id && (
                   <div
                     className={`absolute bottom-full mb-1 z-50 ${
                       isOwn ? "right-0" : "left-0"
                     }`}
                   >
-                      <EmojiPicker
-                        onEmojiSelect={(emoji: { native: string }) =>
-                          handleReaction(msg.id, emoji.native)
-                        }
-                        theme="auto"
-                        previewPosition="none"
-                        skinTonePosition="none"
-                      />
+                    <EmojiPicker
+                      onEmojiSelect={(emoji: { native: string }) =>
+                        handleReaction(msg.id, emoji.native)
+                      }
+                      theme="auto"
+                      previewPosition="none"
+                      skinTonePosition="none"
+                    />
                   </div>
                 )}
 
@@ -603,9 +709,9 @@ export function ChatWindow({
                   </div>
                 ) : (
                   <div
-                    className={`rounded-lg px-3 py-1.5 text-sm ${
+                    className={`rounded-lg px-3 py-1.5 text-sm whitespace-pre-wrap break-words ${
                       isOwn
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-emerald-600 text-white dark:bg-emerald-600"
                         : "bg-muted"
                     }`}
                   >
@@ -633,8 +739,8 @@ export function ChatWindow({
                   </div>
                 )}
 
-                {/* Timestamp + edited label */}
-                {!isEditing && (
+                {/* Timestamp — hidden on grouped messages unless hovered */}
+                {!isEditing && (!isGrouped || hoveredId === msg.id) && (
                   <p
                     className={`text-[10px] text-muted-foreground mt-0.5 ${
                       isOwn ? "text-right" : ""
@@ -650,10 +756,26 @@ export function ChatWindow({
                 )}
               </div>
             </div>
+            </div>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Jump to bottom button */}
+      {isScrolledUp && (
+        <div className="absolute bottom-[5rem] left-0 right-0 flex justify-center z-20 pointer-events-none">
+          <button
+            onClick={handleScrollToBottom}
+            className="pointer-events-auto flex items-center gap-1.5 bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg hover:bg-emerald-700 transition-colors"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+            {newMsgCount > 0
+              ? `${newMsgCount} new ${newMsgCount === 1 ? "message" : "messages"}`
+              : "Scroll to bottom"}
+          </button>
+        </div>
+      )}
 
       {/* Dismiss overlay when emoji picker is open */}
       {isAnyPickerOpen && (
@@ -668,46 +790,74 @@ export function ChatWindow({
 
       {/* Input */}
       <div className="p-4 border-t relative">
-        {/* Input emoji picker - single instance, rendered only when open */}
         {showInputEmoji && (
           <div className="absolute bottom-full mb-2 left-4 z-50">
-              <EmojiPicker
-                onEmojiSelect={(emoji: { native: string }) => {
-                  setNewMessage((prev) => prev + emoji.native);
-                  setShowInputEmoji(false);
-                  inputRef.current?.focus();
-                }}
-                theme="auto"
-                previewPosition="none"
-                skinTonePosition="none"
-              />
+            <EmojiPicker
+              onEmojiSelect={(emoji: { native: string }) => {
+                setNewMessage((prev) => prev + emoji.native);
+                setShowInputEmoji(false);
+                inputRef.current?.focus();
+              }}
+              theme="auto"
+              previewPosition="none"
+              skinTonePosition="none"
+            />
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-2 items-center">
+        <form onSubmit={handleSend} className="flex gap-2 items-end">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="shrink-0"
+            className="shrink-0 mb-0.5"
             onClick={() => setShowInputEmoji(!showInputEmoji)}
           >
             <Smile className="h-5 w-5" />
           </Button>
-          <Input
+          <Textarea
             ref={inputRef}
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setNewMessage(value);
+              if (channelRef.current) {
+                channelRef.current.track({ userId: currentUserId, typing: true });
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = setTimeout(() => {
+                  channelRef.current?.track({ userId: currentUserId, typing: false });
+                }, 2000);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
             placeholder="Type a message..."
             disabled={sending}
+            maxLength={2000}
+            rows={1}
+            className="min-h-[40px] max-h-[120px] resize-none py-2.5 overflow-y-auto"
           />
           <Button
             type="submit"
             size="icon"
+            className="shrink-0 mb-0.5"
             disabled={sending || !newMessage.trim()}
           >
             <Send className="h-4 w-4" />
           </Button>
         </form>
+        {charsLeft <= 400 && (
+          <p
+            className={`text-[10px] text-right mt-1 ${
+              charsLeft <= 100 ? "text-destructive" : "text-muted-foreground"
+            }`}
+          >
+            {charsLeft} remaining
+          </p>
+        )}
       </div>
     </div>
   );

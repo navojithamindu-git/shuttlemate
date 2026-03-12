@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageCircle, Send, Pencil, Trash2, Smile, X, Check } from "lucide-react";
+import { MessageCircle, Send, Pencil, Trash2, Smile, X, Check, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import dynamic from "next/dynamic";
@@ -64,11 +64,19 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
   const [showInputEmoji, setShowInputEmoji] = useState(false);
+  const [typingCount, setTypingCount] = useState(0);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [newMsgCount, setNewMsgCount] = useState(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevMessageCountRef = useRef<number>(0);
+  const hasInitialScrolledRef = useRef(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchMessages = useCallback(async () => {
     const supabase = createClient();
@@ -120,7 +128,7 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Subscribe to realtime messages
+  // Subscribe to realtime messages + presence for typing indicator
   useEffect(() => {
     const supabase = createClient();
 
@@ -219,16 +227,33 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
           });
         }
       )
-      .subscribe();
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{
+          userId: string;
+          typing: boolean;
+        }>();
+        const count = Object.values(state)
+          .flat()
+          .filter((p) => p.typing && p.userId !== currentUserId).length;
+        setTypingCount(count);
+      })
+      .subscribe(async (status: string) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ userId: currentUserId, typing: false });
+        }
+      });
+
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, currentUserId]);
 
-  // Polling fallback + visibility refetch (ensures messages update even if realtime fails)
+  // Polling fallback + visibility refetch (30s — realtime is primary, polling is safety net)
   useEffect(() => {
-    const pollInterval = setInterval(fetchMessages, 5000);
+    const pollInterval = setInterval(fetchMessages, 30000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -243,11 +268,41 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
     };
   }, [fetchMessages]);
 
+  // Track scroll position for jump-to-bottom button
   useEffect(() => {
-    // Only auto-scroll when new messages arrive, not on initial load
-    if (prevMessageCountRef.current > 0 && messages.length > prevMessageCountRef.current) {
-      scrollToBottom();
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      setIsScrolledUp(!nearBottom);
+      if (nearBottom) setNewMsgCount(0);
+    };
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    if (!hasInitialScrolledRef.current) {
+      messagesEndRef.current?.scrollIntoView();
+      hasInitialScrolledRef.current = true;
+      prevMessageCountRef.current = messages.length;
+      return;
     }
+
+    if (messages.length > prevMessageCountRef.current) {
+      const el = scrollContainerRef.current;
+      if (el) {
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        if (isNearBottom) {
+          scrollToBottom();
+        } else {
+          setNewMsgCount((c) => c + (messages.length - prevMessageCountRef.current));
+        }
+      }
+    }
+
     prevMessageCountRef.current = messages.length;
   }, [messages]);
 
@@ -257,6 +312,12 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
     }
   }, [editingId]);
 
+  const handleScrollToBottom = () => {
+    scrollToBottom();
+    setNewMsgCount(0);
+    setIsScrolledUp(false);
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
@@ -264,6 +325,10 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
     const content = newMessage.trim();
     setNewMessage("");
     setSending(true);
+
+    // Clear typing indicator immediately on send
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    channelRef.current?.track({ userId: currentUserId, typing: false });
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg: Message = {
@@ -308,7 +373,7 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
     async (messageId: string) => {
       if (!editContent.trim()) return;
       try {
-        await editSessionMessage(messageId, editContent.trim());
+        await editSessionMessage(messageId, editContent.trim(), sessionId);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId
@@ -324,12 +389,12 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
         );
       }
     },
-    [editContent]
+    [editContent, sessionId]
   );
 
   const handleDelete = useCallback(async (messageId: string) => {
     try {
-      await deleteSessionMessage(messageId);
+      await deleteSessionMessage(messageId, sessionId);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId
@@ -342,11 +407,10 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
         err instanceof Error ? err.message : "Failed to delete message"
       );
     }
-  }, []);
+  }, [sessionId]);
 
   const handleReaction = useCallback(
     async (messageId: string, emoji: string) => {
-      // Optimistic update
       const tempReaction: Reaction = {
         id: `temp-${Date.now()}`,
         user_id: currentUserId,
@@ -434,6 +498,7 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
   };
 
   const isAnyPickerOpen = emojiPickerMsgId !== null || showInputEmoji;
+  const charsLeft = 2000 - newMessage.length;
 
   return (
     <Card>
@@ -456,122 +521,135 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
         )}
 
         {/* Messages */}
-        <div
-          ref={scrollContainerRef}
-          className="h-80 overflow-y-auto space-y-3 mb-4 p-3 rounded-md border bg-muted/30"
-        >
-          {messages.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No messages yet. Start the conversation!
-            </p>
-          )}
-          {messages.map((msg) => {
-            // System messages render differently
-            if (msg.is_system_message) {
-              return (
-                <div key={msg.id} className="flex justify-center my-2">
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 max-w-[85%] text-center">
-                    <p className="text-xs text-amber-800 whitespace-pre-line">
-                      {msg.content}
-                    </p>
-                    <p className="text-[10px] text-amber-600 mt-1">
-                      {formatDistanceToNow(new Date(msg.created_at), {
-                        addSuffix: true,
-                      })}
-                    </p>
+        <div className="relative">
+          <div
+            ref={scrollContainerRef}
+            className="h-80 overflow-y-auto space-y-0 mb-4 p-3 rounded-md border bg-muted/30 chat-texture"
+          >
+            {messages.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No messages yet. Start the conversation!
+              </p>
+            )}
+            {messages.map((msg, index) => {
+              const prevMsg = messages[index - 1];
+              const isGrouped =
+                !msg.is_system_message &&
+                !!prevMsg &&
+                !prevMsg.is_system_message &&
+                prevMsg.user_id === msg.user_id &&
+                !msg.id.startsWith("temp-") &&
+                new Date(msg.created_at).getTime() -
+                  new Date(prevMsg.created_at).getTime() <
+                  2 * 60 * 1000;
+
+              // System messages render differently
+              if (msg.is_system_message) {
+                return (
+                  <div key={msg.id} className="flex justify-center my-3">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 max-w-[85%] text-center">
+                      <p className="text-xs text-amber-800 whitespace-pre-line">
+                        {msg.content}
+                      </p>
+                      <p className="text-[10px] text-amber-600 mt-1">
+                        {formatDistanceToNow(new Date(msg.created_at), {
+                          addSuffix: true,
+                        })}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              );
-            }
+                );
+              }
 
-            const isOwn = msg.user_id === currentUserId;
-            const name = msg.profiles?.full_name ?? "Unknown";
-            const isEditing = editingId === msg.id;
-            const grouped = getGroupedReactions(msg.id);
+              const isOwn = msg.user_id === currentUserId;
+              const name = msg.profiles?.full_name ?? "Unknown";
+              const isEditing = editingId === msg.id;
+              const grouped = getGroupedReactions(msg.id);
+              const isSending = msg.id.startsWith("temp-");
 
-            return (
-              <div
-                key={msg.id}
-                className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""}`}
-                onMouseEnter={() => setHoveredId(msg.id)}
-                onMouseLeave={() => setHoveredId(null)}
-              >
-                {!isOwn && (
-                  <Avatar className="h-7 w-7 shrink-0">
-                    <AvatarImage
-                      src={msg.profiles?.avatar_url ?? undefined}
-                    />
-                    <AvatarFallback className="text-[10px]">
-                      {getInitials(name)}
-                    </AvatarFallback>
-                  </Avatar>
-                )}
+              return (
                 <div
-                  className={`max-w-[75%] relative ${
-                    isOwn ? "items-end" : "items-start"
-                  }`}
+                  key={msg.id}
+                  className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""} ${isGrouped ? "mt-0.5" : "mt-3"} ${isSending ? "opacity-60" : ""}`}
+                  onMouseEnter={() => setHoveredId(msg.id)}
+                  onMouseLeave={() => setHoveredId(null)}
                 >
                   {!isOwn && (
-                    <p className="text-xs text-muted-foreground mb-0.5">
-                      {name}
-                    </p>
+                    isGrouped
+                      ? <div className="w-7 shrink-0" />
+                      : <Avatar className="h-7 w-7 shrink-0">
+                          <AvatarImage src={msg.profiles?.avatar_url ?? undefined} />
+                          <AvatarFallback className="text-[10px]">
+                            {getInitials(name)}
+                          </AvatarFallback>
+                        </Avatar>
                   )}
-
-                  {/* Action buttons */}
-                  {hoveredId === msg.id &&
-                    !isEditing &&
-                    !msg.is_deleted &&
-                    !msg.id.startsWith("temp-") && (
-                      <div
-                        className={`absolute -top-8 ${
-                          isOwn ? "right-0" : "left-0"
-                        } flex items-center gap-0.5 bg-background border rounded-md shadow-sm p-0.5 z-10`}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() =>
-                            setEmojiPickerMsgId(
-                              emojiPickerMsgId === msg.id ? null : msg.id
-                            )
-                          }
-                        >
-                          <Smile className="h-3.5 w-3.5" />
-                        </Button>
-                        {isOwn && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => {
-                                setEditingId(msg.id);
-                                setEditContent(msg.content);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(msg.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                  <div
+                    className={`max-w-[75%] relative ${
+                      isOwn ? "items-end" : "items-start"
+                    }`}
+                  >
+                    {!isOwn && !isGrouped && (
+                      <p className="text-xs text-muted-foreground mb-0.5">
+                        {name}
+                      </p>
                     )}
 
-                  {/* Message-level emoji picker (rendered only for active message) */}
-                  {emojiPickerMsgId === msg.id && (
-                    <div
-                      className={`absolute bottom-full mb-1 z-50 ${
-                        isOwn ? "right-0" : "left-0"
-                      }`}
-                    >
+                    {/* Action buttons */}
+                    {hoveredId === msg.id &&
+                      !isEditing &&
+                      !msg.is_deleted &&
+                      !msg.id.startsWith("temp-") && (
+                        <div
+                          className={`absolute -top-8 ${
+                            isOwn ? "right-0" : "left-0"
+                          } flex items-center gap-0.5 bg-background border rounded-md shadow-sm p-0.5 z-10`}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              setEmojiPickerMsgId(
+                                emojiPickerMsgId === msg.id ? null : msg.id
+                              )
+                            }
+                          >
+                            <Smile className="h-3.5 w-3.5" />
+                          </Button>
+                          {isOwn && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => {
+                                  setEditingId(msg.id);
+                                  setEditContent(msg.content);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => handleDelete(msg.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                    {/* Message-level emoji picker */}
+                    {emojiPickerMsgId === msg.id && (
+                      <div
+                        className={`absolute bottom-full mb-1 z-50 ${
+                          isOwn ? "right-0" : "left-0"
+                        }`}
+                      >
                         <EmojiPicker
                           onEmojiSelect={(emoji: { native: string }) =>
                             handleReaction(msg.id, emoji.native)
@@ -580,113 +658,136 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
                           previewPosition="none"
                           skinTonePosition="none"
                         />
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {/* Message bubble */}
-                  {msg.is_deleted ? (
-                    <div className="rounded-lg px-3 py-1.5 text-sm bg-muted italic text-muted-foreground">
-                      This message was deleted
-                    </div>
-                  ) : isEditing ? (
-                    <div className="flex items-center gap-1">
-                      <Input
-                        ref={editInputRef}
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleEdit(msg.id);
-                          if (e.key === "Escape") {
+                    {/* Message bubble */}
+                    {msg.is_deleted ? (
+                      <div className="rounded-lg px-3 py-1.5 text-sm bg-muted italic text-muted-foreground">
+                        This message was deleted
+                      </div>
+                    ) : isEditing ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          ref={editInputRef}
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleEdit(msg.id);
+                            if (e.key === "Escape") {
+                              setEditingId(null);
+                              setEditContent("");
+                            }
+                          }}
+                          className="text-sm h-8"
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => handleEdit(msg.id)}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => {
                             setEditingId(null);
                             setEditContent("");
-                          }
-                        }}
-                        className="text-sm h-8"
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 shrink-0"
-                        onClick={() => handleEdit(msg.id)}
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 shrink-0"
-                        onClick={() => {
-                          setEditingId(null);
-                          setEditContent("");
-                        }}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div
-                      className={`rounded-lg px-3 py-1.5 text-sm ${
-                        isOwn
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      }`}
-                    >
-                      {msg.content}
-                    </div>
-                  )}
-
-                  {/* Reactions */}
-                  {grouped.length > 0 && (
-                    <div className={`flex flex-wrap gap-1 mt-1 ${isOwn ? "justify-end" : ""}`}>
-                      {grouped.map((r) => (
-                        <button
-                          key={r.emoji}
-                          onClick={() => handleReaction(msg.id, r.emoji)}
-                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors ${
-                            r.userReacted
-                              ? "bg-primary/10 border-primary/30"
-                              : "bg-muted border-transparent hover:border-border"
-                          }`}
+                          }}
                         >
-                          <span>{r.emoji}</span>
-                          <span className="text-muted-foreground">{r.count}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div
+                        className={`rounded-lg px-3 py-1.5 text-sm whitespace-pre-wrap break-words ${
+                          isOwn
+                            ? "bg-emerald-600 text-white dark:bg-emerald-600"
+                            : "bg-muted"
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+                    )}
 
-                  {/* Timestamp + edited label */}
-                  {!isEditing && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {formatDistanceToNow(new Date(msg.created_at), {
-                        addSuffix: true,
-                      })}
-                      {msg.is_edited && !msg.is_deleted && (
-                        <span className="ml-1">(edited)</span>
-                      )}
-                    </p>
-                  )}
+                    {/* Reactions */}
+                    {grouped.length > 0 && (
+                      <div className={`flex flex-wrap gap-1 mt-1 ${isOwn ? "justify-end" : ""}`}>
+                        {grouped.map((r) => (
+                          <button
+                            key={r.emoji}
+                            onClick={() => handleReaction(msg.id, r.emoji)}
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors ${
+                              r.userReacted
+                                ? "bg-primary/10 border-primary/30"
+                                : "bg-muted border-transparent hover:border-border"
+                            }`}
+                          >
+                            <span>{r.emoji}</span>
+                            <span className="text-muted-foreground">{r.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Timestamp — hidden on grouped messages unless hovered */}
+                    {!isEditing && (!isGrouped || hoveredId === msg.id) && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {formatDistanceToNow(new Date(msg.created_at), {
+                          addSuffix: true,
+                        })}
+                        {msg.is_edited && !msg.is_deleted && (
+                          <span className="ml-1">(edited)</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Jump to bottom button */}
+          {isScrolledUp && (
+            <div className="absolute bottom-5 left-0 right-0 flex justify-center pointer-events-none z-10">
+              <button
+                onClick={handleScrollToBottom}
+                className="pointer-events-auto flex items-center gap-1.5 bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg hover:bg-emerald-700 transition-colors"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+                {newMsgCount > 0
+                  ? `${newMsgCount} new ${newMsgCount === 1 ? "message" : "messages"}`
+                  : "Scroll to bottom"}
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Typing indicator */}
+        {typingCount > 0 && (
+          <p className="text-xs text-muted-foreground italic mb-2">
+            {typingCount === 1 ? "Someone is typing..." : `${typingCount} people are typing...`}
+          </p>
+        )}
 
         {/* Input */}
         <div className="relative">
           {showInputEmoji && (
             <div className="absolute bottom-full mb-2 left-0 z-50">
-                <EmojiPicker
-                  onEmojiSelect={(emoji: { native: string }) => {
-                    setNewMessage((prev) => prev + emoji.native);
-                    setShowInputEmoji(false);
-                    inputRef.current?.focus();
-                  }}
-                  theme="auto"
-                  previewPosition="none"
-                  skinTonePosition="none"
-                />
+              <EmojiPicker
+                onEmojiSelect={(emoji: { native: string }) => {
+                  setNewMessage((prev) => prev + emoji.native);
+                  setShowInputEmoji(false);
+                  inputRef.current?.focus();
+                }}
+                theme="auto"
+                previewPosition="none"
+                skinTonePosition="none"
+              />
             </div>
           )}
           <form onSubmit={handleSend} className="flex gap-2 items-center">
@@ -702,14 +803,35 @@ export function SessionChat({ sessionId, currentUserId }: SessionChatProps) {
             <Input
               ref={inputRef}
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setNewMessage(value);
+                // Typing indicator via presence
+                if (channelRef.current) {
+                  channelRef.current.track({ userId: currentUserId, typing: true });
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                  typingTimeoutRef.current = setTimeout(() => {
+                    channelRef.current?.track({ userId: currentUserId, typing: false });
+                  }, 2000);
+                }
+              }}
               placeholder="Type a message..."
               disabled={sending}
+              maxLength={2000}
             />
             <Button type="submit" size="icon" disabled={sending || !newMessage.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           </form>
+          {charsLeft <= 400 && (
+            <p
+              className={`text-[10px] text-right mt-1 ${
+                charsLeft <= 100 ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {charsLeft} remaining
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
