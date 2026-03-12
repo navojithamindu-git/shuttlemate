@@ -40,10 +40,13 @@ export default async function DashboardPage() {
   if (!profile?.profile_complete) redirect("/profile/complete");
 
   const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().split("T")[0];
+  // Use local date parts to avoid UTC shift (critical for UTC+5:30 and similar timezones)
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const nextWeekDate = new Date(now); nextWeekDate.setDate(now.getDate() + 7);
+  const nextWeek = `${nextWeekDate.getFullYear()}-${pad(nextWeekDate.getMonth() + 1)}-${pad(nextWeekDate.getDate())}`;
   const weekStartDate = getWeekStart(now);
-  const weekStartStr = weekStartDate.toISOString().split("T")[0];
+  const weekStartStr = `${weekStartDate.getFullYear()}-${pad(weekStartDate.getMonth() + 1)}-${pad(weekStartDate.getDate())}`;
   const weekStartISO = weekStartDate.toISOString();
 
   // 3 months back for streak calculation
@@ -176,9 +179,10 @@ export default async function DashboardPage() {
   const seenIds = new Set<string>();
   const weekSessions = allWeekRaw
     .filter((s) => { if (seenIds.has(s.id)) return false; seenIds.add(s.id); return true; })
-    // Exclude today's sessions that haven't started yet
+    // Exclude future sessions (tomorrow+) and today's sessions that haven't started yet
     .filter((s) => {
-      if (s.date !== today) return true;
+      if (s.date > today) return false;
+      if (s.date < today) return true;
       const [sh, sm] = s.start_time.split(":").map(Number);
       return sh * 60 + sm <= nowTimeMinutes;
     });
