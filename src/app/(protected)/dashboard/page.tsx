@@ -168,10 +168,10 @@ export default async function DashboardPage() {
 
   // Activity this week — merge public + group sessions, deduplicate by id
   const nowTimeMinutes = now.getHours() * 60 + now.getMinutes();
-  type SessionRow = { id: string; date: string; start_time: string; end_time: string; game_type: string };
+  type SessionRow = { id: string; date: string; start_time: string; end_time: string; game_type: string; status: string };
   const allWeekRaw = [
-    ...(weekSessionParticipants ?? []).map((p) => (p as { sessions: SessionRow }).sessions),
-    ...(weekGroupRsvps ?? []).map((p) => (p as { sessions: SessionRow }).sessions),
+    ...(weekSessionParticipants ?? []).map((p) => (p as unknown as { sessions: SessionRow }).sessions),
+    ...(weekGroupRsvps ?? []).map((p) => (p as unknown as { sessions: SessionRow }).sessions),
   ].filter(Boolean);
   const seenIds = new Set<string>();
   const weekSessions = allWeekRaw
@@ -192,8 +192,8 @@ export default async function DashboardPage() {
 
   // Weekly streak — combine public + group session dates, deduplicate
   const allSessionDates = [
-    ...(streakSessions ?? []).map((p) => (p as { sessions: { date: string } }).sessions?.date),
-    ...(streakGroupRsvps ?? []).map((p) => (p as { sessions: { date: string } }).sessions?.date),
+    ...(streakSessions ?? []).map((p) => (p as unknown as { sessions: { date: string } }).sessions?.date),
+    ...(streakGroupRsvps ?? []).map((p) => (p as unknown as { sessions: { date: string } }).sessions?.date),
   ].filter(Boolean) as string[];
   const weekStreak = calcStreak([...new Set(allSessionDates)], now);
 
