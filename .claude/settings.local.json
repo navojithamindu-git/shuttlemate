@@ -13,7 +13,10 @@
       "Bash(npm run:*)",
       "Bash(grep -r @mention /c/Users/Thamindu/Downloads/JH/Litarature/shuttlemates/src --include=*.ts --include=*.tsx)",
       "Bash(npx tsc:*)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(grep -E \"\\(^|/\\)lib/|^[^/]*\\\\.\\(ts|tsx\\)$\")",
+      "Bash(git -C \"c:\\\\Users\\\\Thamindu\\\\Downloads\\\\JH\\\\Litarature\\\\shuttlemates\" log --oneline -15)",
+      "Bash(git -C \"c:\\\\Users\\\\Thamindu\\\\Downloads\\\\JH\\\\Litarature\\\\shuttlemates\" branch -a)"
     ]
   }
 }
