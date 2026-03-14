@@ -110,6 +110,38 @@ async function recalculateGroupStats(groupId: string, affectedPlayerIds: string[
   }
 }
 
+// ─── Score Validation ─────────────────────────────────────────────────────────
+
+function validateBadmintonScore(a: number, b: number): string | null {
+  if (!Number.isInteger(a) || !Number.isInteger(b)) return "Scores must be whole numbers";
+  if (a < 0 || b < 0) return "Scores can't be negative";
+  if (a === b) return "Scores can't be tied";
+  const winner = Math.max(a, b);
+  const loser = Math.min(a, b);
+  if (winner < 21) return `Game must reach 21`;
+  if (winner > 30) return "Max score is 30";
+  if (winner === 30) {
+    if (loser < 28) return "At 30 pts, opponent must have 28 or 29";
+    return null;
+  }
+  if (loser >= 20 && winner - loser < 2) return "Must win by 2 points from deuce";
+  if (loser < 20 && winner !== 21) return `Win must be exactly 21 when opponent has less than 20`;
+  return null;
+}
+
+function validateScores(scores: LogMatchData["scores"]): void {
+  const sets: [ScoreSet, string][] = [
+    [scores.set1, "Set 1"],
+    [scores.set2, "Set 2"],
+  ];
+  if (scores.set3) sets.push([scores.set3, "Set 3"]);
+
+  for (const [set, label] of sets) {
+    const err = validateBadmintonScore(set.team1, set.team2);
+    if (err) throw new Error(`${label}: ${err}`);
+  }
+}
+
 // ─── Log Match ───────────────────────────────────────────────────────────────
 
 export async function logMatch(groupId: string, data: LogMatchData) {
@@ -130,6 +162,8 @@ export async function logMatch(groupId: string, data: LogMatchData) {
   if (!member || !["owner", "admin"].includes(member.role)) {
     throw new Error("Not authorized");
   }
+
+  validateScores(data.scores);
 
   const admin = createAdminClient();
   const winningTeam = detectWinningTeam(data.scores);
@@ -437,7 +471,8 @@ export async function generateMatchups(groupId: string, data: GenerateMatchupsDa
 
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/groups/${groupId}`);
+  // No revalidatePath here — matchup is returned to the modal directly;
+  // the page doesn't display matchups so a refresh would just reset modal state.
   return matchup;
 }
 

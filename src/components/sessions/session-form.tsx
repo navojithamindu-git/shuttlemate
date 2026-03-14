@@ -341,15 +341,28 @@ export function SessionForm({ mode = "create", initialData }: SessionFormProps) 
             )}
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading
-              ? isEdit
-                ? "Saving..."
-                : "Creating..."
-              : isEdit
-                ? "Save Changes"
-                : "Create Session"}
-          </Button>
+          <div className={isEdit ? "grid grid-cols-2 gap-3" : ""}>
+            {isEdit && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={loading}
+                onClick={() => router.push(`/sessions/${initialData!.id}`)}
+              >
+                Cancel
+              </Button>
+            )}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading
+                ? isEdit
+                  ? "Saving..."
+                  : "Creating..."
+                : isEdit
+                  ? "Save Changes"
+                  : "Create Session"}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

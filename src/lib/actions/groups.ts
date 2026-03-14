@@ -787,11 +787,43 @@ export async function promoteMember(groupId: string, targetUserId: string) {
 
   if (callerMember?.role !== "owner") throw new Error("Only the owner can promote members");
 
-  await supabase
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("group_members")
     .update({ role: "admin" })
     .eq("group_id", groupId)
     .eq("user_id", targetUserId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/groups/${groupId}`);
+}
+
+export async function demoteMember(groupId: string, targetUserId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const { data: callerMember } = await supabase
+    .from("group_members")
+    .select("role")
+    .eq("group_id", groupId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (callerMember?.role !== "owner") throw new Error("Only the owner can demote members");
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("group_members")
+    .update({ role: "member" })
+    .eq("group_id", groupId)
+    .eq("user_id", targetUserId);
+
+  if (error) throw new Error(error.message);
 
   revalidatePath(`/groups/${groupId}`);
 }

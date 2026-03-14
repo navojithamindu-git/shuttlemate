@@ -188,13 +188,26 @@ export function ProfileForm({ profile, isOnboarding = false, redirectTo }: Profi
           <span className="text-sm text-muted-foreground shrink-0">kg</span>
         </div>
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading
-          ? "Saving..."
-          : isOnboarding
-            ? "Complete Profile & Start"
-            : "Save Changes"}
-      </Button>
+      <div className={!isOnboarding ? "grid grid-cols-2 gap-3" : ""}>
+        {!isOnboarding && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={loading}
+            onClick={() => router.back()}
+          >
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading
+            ? "Saving..."
+            : isOnboarding
+              ? "Complete Profile & Start"
+              : "Save Changes"}
+        </Button>
+      </div>
     </form>
   );
 }
