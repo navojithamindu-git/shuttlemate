@@ -31,10 +31,13 @@ function groupColor(name: string) {
 
 export default async function GroupDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { id } = await params;
+  const { tab } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -179,7 +182,7 @@ export default async function GroupDetailPage({
       </div>
 
       {/* Main tabs */}
-      <Tabs defaultValue="schedule" className="flex-1">
+      <Tabs defaultValue={tab ?? "schedule"} className="flex-1">
         <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="schedule" className="text-xs">
             Schedule{upcomingSessions.length > 0 && ` (${upcomingSessions.length})`}

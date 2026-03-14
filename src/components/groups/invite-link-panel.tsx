@@ -19,6 +19,7 @@ export function InviteLinkPanel({ groupId, existingLink }: InviteLinkPanelProps)
     existingLink ?? null
   );
   const [isPending, startTransition] = useTransition();
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   const handleGenerate = () => {
     startTransition(async () => {
@@ -33,6 +34,7 @@ export function InviteLinkPanel({ groupId, existingLink }: InviteLinkPanelProps)
   };
 
   const handleRevoke = () => {
+    setConfirmingRevoke(false);
     startTransition(async () => {
       try {
         await revokeInviteLink(groupId);
@@ -79,16 +81,28 @@ export function InviteLinkPanel({ groupId, existingLink }: InviteLinkPanelProps)
                 <RefreshCw className="h-3 w-3" />
                 New link
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={isPending}
-                onClick={handleRevoke}
-                className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-3 w-3" />
-                Revoke
-              </Button>
+              {confirmingRevoke ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">Revoke link?</span>
+                  <Button size="sm" variant="destructive" disabled={isPending} onClick={handleRevoke} className="text-xs h-7">
+                    Yes
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={isPending} onClick={() => setConfirmingRevoke(false)} className="text-xs h-7">
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={isPending}
+                  onClick={() => setConfirmingRevoke(true)}
+                  className="text-xs h-7 gap-1 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Revoke
+                </Button>
+              )}
             </div>
           </div>
         </div>

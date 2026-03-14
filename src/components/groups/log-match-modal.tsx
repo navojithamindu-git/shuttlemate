@@ -31,6 +31,28 @@ function getInitials(name: string | null) {
   return name ? name.split(" ").map((n) => n[0]).join("").toUpperCase() : "?";
 }
 
+function validateBadmintonScore(a: number, b: number): string | null {
+  if (isNaN(a) || isNaN(b)) return "Enter both scores";
+  if (a < 0 || b < 0) return "Scores can't be negative";
+  if (a === b) return "Scores can't be tied";
+  const winner = Math.max(a, b);
+  const loser = Math.min(a, b);
+  if (winner < 21) return `Game must reach 21 (${a}–${b} is incomplete)`;
+  if (winner > 30) return "Max score is 30";
+  if (winner === 30) {
+    if (loser < 28) return "At 30 pts, opponent must have 28 or 29";
+    return null; // 30-28 or 30-29 are valid
+  }
+  // winner is 21–29
+  if (loser < 20) {
+    if (winner !== 21) return `Win by 21 when opponent has < 20 (not ${winner})`;
+  } else {
+    // deuce territory: must win by 2
+    if (winner - loser < 2) return "Must win by 2 points from deuce (e.g. 22–20)";
+  }
+  return null;
+}
+
 function PlayerChip({
   member,
   team,
@@ -147,16 +169,24 @@ export function LogMatchModal({
   const step2Valid = team1Ids.length === requiredPerTeam && team2Ids.length === requiredPerTeam;
 
   const parseScore = (s: string) => parseInt(s, 10);
+
+  const scoreError = (setKey: "set1" | "set2" | "set3"): string | null => {
+    const { team1, team2 } = scores[setKey];
+    if (team1 === "" && team2 === "") return null; // not touched yet
+    return validateBadmintonScore(parseScore(team1), parseScore(team2));
+  };
+
+  const set1Error = scoreError("set1");
+  const set2Error = scoreError("set2");
+
   const set1Valid =
     scores.set1.team1 !== "" &&
     scores.set1.team2 !== "" &&
-    !isNaN(parseScore(scores.set1.team1)) &&
-    !isNaN(parseScore(scores.set1.team2));
+    set1Error === null;
   const set2Valid =
     scores.set2.team1 !== "" &&
     scores.set2.team2 !== "" &&
-    !isNaN(parseScore(scores.set2.team1)) &&
-    !isNaN(parseScore(scores.set2.team2));
+    set2Error === null;
 
   // Set 3 needed when set 1 and set 2 have different winners
   const set1Winner =
@@ -172,12 +202,13 @@ export function LogMatchModal({
         : 2
       : null;
   const needsSet3 = set1Winner !== null && set2Winner !== null && set1Winner !== set2Winner;
+
+  const set3Error = needsSet3 ? scoreError("set3") : null;
   const set3Valid =
     !needsSet3 ||
     (scores.set3.team1 !== "" &&
       scores.set3.team2 !== "" &&
-      !isNaN(parseScore(scores.set3.team1)) &&
-      !isNaN(parseScore(scores.set3.team2)));
+      set3Error === null);
 
   const step3Valid = set1Valid && set2Valid && set3Valid;
 
@@ -321,41 +352,37 @@ export function LogMatchModal({
 
   const renderScoreInput = (
     setKey: "set1" | "set2" | "set3",
-    label: string
+    label: string,
+    error: string | null
   ) => (
     <div className="space-y-1">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <div className="flex items-center gap-2">
         <Input
-          type="number"
-          min="0"
-          max="99"
+          type="text"
+          inputMode="numeric"
           placeholder="0"
           value={scores[setKey].team1}
-          onChange={(e) =>
-            setScores((prev) => ({
-              ...prev,
-              [setKey]: { ...prev[setKey], team1: e.target.value },
-            }))
-          }
-          className="text-center h-9 text-blue-600"
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, "");
+            setScores((prev) => ({ ...prev, [setKey]: { ...prev[setKey], team1: v } }));
+          }}
+          className={`text-center h-9 text-blue-600 ${error ? "border-destructive" : ""}`}
         />
         <span className="text-muted-foreground font-bold shrink-0">–</span>
         <Input
-          type="number"
-          min="0"
-          max="99"
+          type="text"
+          inputMode="numeric"
           placeholder="0"
           value={scores[setKey].team2}
-          onChange={(e) =>
-            setScores((prev) => ({
-              ...prev,
-              [setKey]: { ...prev[setKey], team2: e.target.value },
-            }))
-          }
-          className="text-center h-9 text-orange-600"
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, "");
+            setScores((prev) => ({ ...prev, [setKey]: { ...prev[setKey], team2: v } }));
+          }}
+          className={`text-center h-9 text-orange-600 ${error ? "border-destructive" : ""}`}
         />
       </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 
@@ -369,9 +396,9 @@ export function LogMatchModal({
           T2: {team2Ids.map((id) => getMemberById(id)?.profiles.full_name?.split(" ")[0] ?? "?").join(" & ")}
         </span>
       </div>
-      {renderScoreInput("set1", "Set 1")}
-      {renderScoreInput("set2", "Set 2")}
-      {needsSet3 && renderScoreInput("set3", "Set 3")}
+      {renderScoreInput("set1", "Set 1", set1Error)}
+      {renderScoreInput("set2", "Set 2", set2Error)}
+      {needsSet3 && renderScoreInput("set3", "Set 3", set3Error)}
       {step3Valid && winningTeam !== null && (
         <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
           <Trophy className="h-4 w-4 text-yellow-500 shrink-0" />

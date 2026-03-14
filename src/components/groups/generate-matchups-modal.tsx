@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -201,6 +202,7 @@ export function GenerateMatchupsModal({
   const [sharedToChat, setSharedToChat] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const router = useRouter();
 
   // Fetch members + stats when modal opens
   useEffect(() => {
@@ -351,7 +353,10 @@ export function GenerateMatchupsModal({
                     Players
                   </p>
                   <span className="text-xs text-muted-foreground">
-                    {selectedList.length} selected · {Math.floor(selectedList.length / perCourt)} courts
+                    {selectedList.length} selected · {Math.floor(selectedList.length / perCourt)} court{Math.floor(selectedList.length / perCourt) !== 1 ? "s" : ""}
+                    {selectedList.length % perCourt > 0 && (
+                      <span className="text-amber-500 ml-1">· {selectedList.length % perCourt} sits out</span>
+                    )}
                   </span>
                 </div>
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
@@ -455,6 +460,19 @@ export function GenerateMatchupsModal({
                       </div>
                     );
                   })}
+                  {(() => {
+                    const assignedIds = new Set(
+                      generatedCourts.flatMap((c) => [...c.team1, ...c.team2])
+                    );
+                    const sittingOut = [...selectedIds].filter((id) => !assignedIds.has(id));
+                    if (sittingOut.length === 0) return null;
+                    return (
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                        <span className="font-medium">Sits out: </span>
+                        {sittingOut.map(getName).join(", ")}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <Button
@@ -466,6 +484,19 @@ export function GenerateMatchupsModal({
                 >
                   <MessageSquare className="h-4 w-4" />
                   {sharedToChat ? "Shared to chat ✓" : "Share to Group Chat"}
+                </Button>
+
+                <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  After the matches are played, head to the <span className="font-medium text-foreground">Matches tab</span> and tap <span className="font-medium text-foreground">+ Log Match</span> to record results and update the leaderboard.
+                </div>
+
+                <Button
+                  type="button"
+                  variant="default"
+                  className="w-full"
+                  onClick={handleClose}
+                >
+                  Done
                 </Button>
               </>
             )}

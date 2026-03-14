@@ -200,15 +200,28 @@ export function GroupForm({ mode, group }: GroupFormProps) {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button
-        type="submit"
-        disabled={isPending || (mode === "edit" && !isDirty)}
-        className="w-full"
-      >
-        {isPending
-          ? mode === "create" ? "Creating..." : "Saving..."
-          : mode === "create" ? "Create Group" : "Save Changes"}
-      </Button>
+      <div className={mode === "edit" ? "grid grid-cols-2 gap-3" : ""}>
+        {mode === "edit" && group && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={isPending}
+            onClick={() => router.push(`/groups/${group.id}`)}
+          >
+            Cancel
+          </Button>
+        )}
+        <Button
+          type="submit"
+          disabled={isPending || (mode === "edit" && !isDirty)}
+          className="w-full"
+        >
+          {isPending
+            ? mode === "create" ? "Creating..." : "Saving..."
+            : mode === "create" ? "Create Group" : "Save Changes"}
+        </Button>
+      </div>
     </form>
   );
 }
