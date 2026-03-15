@@ -120,7 +120,10 @@ export function GroupSessionCard({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <span className="flex items-center gap-1 text-sm text-muted-foreground mr-1">
+            <span
+              className="flex items-center gap-1 text-sm text-muted-foreground mr-1"
+              title={`${byStatus.yes.length} of ${groupMembers.length} members going`}
+            >
               <Users className="h-4 w-4" />
               {byStatus.yes.length}/{groupMembers.length}
             </span>
@@ -143,6 +146,7 @@ export function GroupSessionCard({
                 className="h-7 px-2 text-muted-foreground hover:text-destructive"
                 onClick={() => setConfirmCancel(true)}
                 disabled={isPending}
+                title="Cancel session"
               >
                 <X className="h-3.5 w-3.5" />
               </Button>

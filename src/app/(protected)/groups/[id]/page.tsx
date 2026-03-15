@@ -94,6 +94,24 @@ export default async function GroupDetailPage({
     )
     .sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
 
+  const nowDate = new Date();
+  const loggableSessions = ((group.sessions as any[]) ?? [])
+    .filter((s: { date: string; start_time: string; status: string }) => {
+      if (s.status === "cancelled") return false;
+      const start = new Date(`${s.date}T${s.start_time}`);
+      if (start > nowDate) return false; // session hasn't started yet
+      // Allow logging on the session day and the day after, then window closes
+      const [y, mo, d] = (s.date as string).split("-").map(Number);
+      const dayAfterStr = new Date(y, mo - 1, d + 1)
+        .toISOString().split("T")[0];
+      return today <= dayAfterStr;
+    })
+    .map((s: { id: string; date: string; start_time: string }) => ({
+      id: s.id,
+      date: s.date,
+      start_time: s.start_time,
+    }));
+
   // Active invite link (non-expired)
   const activeInvite = ((group.group_invitations as any[]) ?? []).find(
     (inv: { expires_at: string }) => new Date(inv.expires_at) > new Date()
@@ -266,6 +284,7 @@ export default async function GroupDetailPage({
             matches={(matches ?? []) as any[]}
             groupMembers={group.group_members as any[]}
             canManage={canManage}
+            loggableSessions={loggableSessions}
           />
         </TabsContent>
 
