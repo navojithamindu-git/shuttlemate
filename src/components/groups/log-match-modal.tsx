@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Trophy, ChevronRight, ChevronLeft } from "lucide-react";
+import { Trophy, ChevronRight, ChevronLeft, Calendar } from "lucide-react";
+import { format as formatDate } from "date-fns";
 import { toast } from "sonner";
 import { logMatch } from "@/lib/actions/matches";
 import type { MatchFormat, GroupMember, Profile, MatchWithPlayers } from "@/lib/types/database";
@@ -17,6 +18,7 @@ interface LogMatchModalProps {
   groupMembers: (GroupMember & {
     profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
   })[];
+  sessions: { id: string; date: string; start_time: string }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (match: MatchWithPlayers) => void;
@@ -95,6 +97,7 @@ function PlayerChip({
 export function LogMatchModal({
   groupId,
   groupMembers,
+  sessions,
   open,
   onOpenChange,
   onSuccess,
@@ -107,6 +110,7 @@ export function LogMatchModal({
     set2: { team1: "", team2: "" },
     set3: { team1: "", team2: "" },
   });
+  const [selectedSessionId, setSelectedSessionId] = useState<string>(sessions[0]?.id ?? "");
   const [isPending, startTransition] = useTransition();
 
   const reset = () => {
@@ -118,6 +122,12 @@ export function LogMatchModal({
       set2: { team1: "", team2: "" },
       set3: { team1: "", team2: "" },
     });
+    setSelectedSessionId(sessions[0]?.id ?? "");
+  };
+
+  const formatSession = (s: { date: string; start_time: string }) => {
+    const d = new Date(`${s.date}T${s.start_time}`);
+    return `${formatDate(d, "EEE, MMM d")} · ${formatDate(d, "HH:mm")}`;
   };
 
   const handleClose = () => {
@@ -246,6 +256,7 @@ export function LogMatchModal({
 
         await logMatch(groupId, {
           format,
+          sessionId: selectedSessionId,
           team1PlayerIds: team1Ids,
           team2PlayerIds: team2Ids,
           scores: { set1: s1, set2: s2, set3: s3 },
@@ -298,6 +309,35 @@ export function LogMatchModal({
 
   const renderStep1 = () => (
     <div className="space-y-4">
+      {/* Session indicator / picker */}
+      {sessions.length === 1 ? (
+        <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">Session:</span>
+          <span className="font-medium">{formatSession(sessions[0])}</span>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Session</p>
+          <div className="space-y-1">
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSelectedSessionId(s.id)}
+                className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-left transition-colors border ${
+                  selectedSessionId === s.id
+                    ? "border-primary bg-primary/10"
+                    : "border-transparent bg-muted/50 hover:bg-muted"
+                }`}
+              >
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                {formatSession(s)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="text-sm text-muted-foreground">Choose the match format.</p>
       <div className="flex gap-3">
         <Button

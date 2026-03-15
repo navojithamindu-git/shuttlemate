@@ -16,7 +16,7 @@ interface ScoreSet {
 
 export interface LogMatchData {
   format: MatchFormat;
-  sessionId?: string;
+  sessionId: string;
   team1PlayerIds: string[];
   team2PlayerIds: string[];
   scores: {
@@ -165,6 +165,27 @@ export async function logMatch(groupId: string, data: LogMatchData) {
 
   validateScores(data.scores);
 
+  // Validate session and logging window
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("date, start_time, status, group_id")
+    .eq("id", data.sessionId)
+    .single();
+
+  if (!session || session.group_id !== groupId || session.status === "cancelled")
+    throw new Error("Invalid session");
+
+  const sessionStart = new Date(`${session.date}T${session.start_time}`);
+  const now = new Date();
+
+  if (now < sessionStart) throw new Error("Session has not started yet");
+
+  // Window closes at end of the day after the session date
+  const [y, mo, d] = session.date.split("-").map(Number);
+  const windowEnd = new Date(y, mo - 1, d + 1);
+  windowEnd.setHours(23, 59, 59, 999);
+  if (now > windowEnd) throw new Error("Logging window for this session has closed");
+
   const admin = createAdminClient();
   const winningTeam = detectWinningTeam(data.scores);
 
@@ -173,11 +194,11 @@ export async function logMatch(groupId: string, data: LogMatchData) {
     .from("matches")
     .insert({
       group_id: groupId,
-      session_id: data.sessionId ?? null,
+      session_id: data.sessionId,
       format: data.format,
       status: "completed",
       logged_by: user.id,
-      played_at: new Date().toISOString(),
+      played_at: sessionStart.toISOString(),
     })
     .select("id")
     .single();

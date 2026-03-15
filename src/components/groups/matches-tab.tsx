@@ -19,6 +19,7 @@ interface MatchesTabProps {
     profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
   })[];
   canManage: boolean;
+  loggableSessions: { id: string; date: string; start_time: string }[];
 }
 
 function getInitials(name: string | null) {
@@ -165,7 +166,7 @@ function MatchCard({
   );
 }
 
-export function MatchesTab({ groupId, matches, groupMembers, canManage }: MatchesTabProps) {
+export function MatchesTab({ groupId, matches, groupMembers, canManage, loggableSessions }: MatchesTabProps) {
   const [localMatches, setLocalMatches] = useState(matches);
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -188,13 +189,18 @@ export function MatchesTab({ groupId, matches, groupMembers, canManage }: Matche
 
   return (
     <div className="space-y-3">
-      {canManage && (
+      {canManage && loggableSessions.length > 0 && (
         <div className="flex justify-end">
           <Button size="sm" className="gap-1" onClick={() => setLogModalOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             Log Match
           </Button>
         </div>
+      )}
+      {canManage && loggableSessions.length === 0 && (
+        <p className="text-xs text-muted-foreground text-right">
+          Matches can be logged on the session day and the following day.
+        </p>
       )}
 
       {localMatches.length === 0 ? (
@@ -220,6 +226,7 @@ export function MatchesTab({ groupId, matches, groupMembers, canManage }: Matche
       <LogMatchModal
         groupId={groupId}
         groupMembers={groupMembers}
+        sessions={loggableSessions}
         open={logModalOpen}
         onOpenChange={setLogModalOpen}
         onSuccess={handleMatchLogged}
