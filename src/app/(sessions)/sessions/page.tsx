@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cleanupExpiredSessions, cleanupUnconfirmedParticipants } from "@/lib/actions/sessions";
 import { SessionCard } from "@/components/sessions/session-card";
 import { SessionFilters } from "@/components/sessions/session-filters";
 import { PageHeader } from "@/components/layout/page-header";
@@ -23,14 +22,6 @@ export default async function SessionsPage({
 }) {
   const params = await searchParams;
 
-  // Clean up expired sessions and unconfirmed participants before fetching
-  await cleanupExpiredSessions();
-  try {
-    await cleanupUnconfirmedParticipants();
-  } catch (err) {
-    console.error("Failed to cleanup unconfirmed participants:", err);
-  }
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -39,7 +30,8 @@ export default async function SessionsPage({
   // Use admin client so the query works for both authenticated and guest users
   // regardless of RLS policies on the sessions table
   const adminClient = createAdminClient();
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
 
   let query = adminClient
     .from("sessions")
@@ -56,8 +48,13 @@ export default async function SessionsPage({
   if (params.skill_level) query = query.eq("skill_level", params.skill_level);
   if (params.game_type) query = query.eq("game_type", params.game_type);
 
-  const { data: sessions } = await query;
-  const sessionCount = sessions?.length ?? 0;
+  const { data: rawSessions } = await query;
+  const sessions =
+    rawSessions?.filter((session) => {
+      const endAt = new Date(`${session.date}T${session.end_time}`);
+      return endAt > now;
+    }) ?? [];
+  const sessionCount = sessions.length;
   const isFiltered = !!(params.city || params.skill_level || params.game_type);
 
   return (

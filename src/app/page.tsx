@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +124,29 @@ const features = [
   },
 ];
 
+const getLandingStats = unstable_cache(
+  async () => {
+    const admin = createAdminClient();
+    const [
+      { count: playerCount },
+      { count: sessionCount },
+      { data: cityData },
+    ] = await Promise.all([
+      admin.from("profiles").select("*", { count: "exact", head: true }),
+      admin.from("sessions").select("*", { count: "exact", head: true }),
+      admin.from("sessions").select("city").not("city", "is", null),
+    ]);
+
+    return {
+      playerCount: playerCount ?? 0,
+      sessionCount: sessionCount ?? 0,
+      uniqueCities: new Set(cityData?.map((s) => s.city) ?? []).size,
+    };
+  },
+  ["landing-stats"],
+  { revalidate: 3600 }
+);
+
 export default async function LandingPage() {
   const supabase = await createClient();
 
@@ -131,18 +156,7 @@ export default async function LandingPage() {
 
   if (user) redirect("/dashboard");
 
-  // Fetch real stats from the database
-  const [
-    { count: playerCount },
-    { count: sessionCount },
-    { data: cityData },
-  ] = await Promise.all([
-    supabase.from("profiles").select("*", { count: "exact", head: true }),
-    supabase.from("sessions").select("*", { count: "exact", head: true }),
-    supabase.from("sessions").select("city"),
-  ]);
-
-  const uniqueCities = new Set(cityData?.map((s) => s.city) ?? []).size;
+  const { playerCount, sessionCount, uniqueCities } = await getLandingStats();
 
   const stats = [
     { value: playerCount ?? 0, label: "Active Players" },

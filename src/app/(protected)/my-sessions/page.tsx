@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { cleanupExpiredSessions } from "@/lib/actions/sessions";
 import { SessionCard } from "@/components/sessions/session-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -8,9 +7,6 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 export default async function MySessionsPage() {
-  // Clean up expired sessions before fetching
-  await cleanupExpiredSessions();
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,9 +42,11 @@ export default async function MySessionsPage() {
     joinedSessions = data;
   }
 
-  // Split into upcoming and past
-  const isUpcoming = (s: { status: string }) =>
-    s.status !== "completed" && s.status !== "cancelled";
+  const now = new Date();
+  const isUpcoming = (s: { date: string; end_time: string; status: string }) =>
+    s.status !== "completed" &&
+    s.status !== "cancelled" &&
+    new Date(`${s.date}T${s.end_time}`) > now;
 
   const createdUpcoming = createdSessions?.filter(isUpcoming) ?? [];
   const createdPast = createdSessions?.filter((s) => !isUpcoming(s)) ?? [];
