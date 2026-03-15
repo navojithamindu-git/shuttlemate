@@ -10,8 +10,9 @@ import {
 } from "@/lib/actions/messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send, Pencil, Trash2, Smile, X, Check } from "lucide-react";
+import { Send, Pencil, Trash2, Smile, X, Check, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import dynamic from "next/dynamic";
@@ -48,12 +49,56 @@ interface Message {
   };
 }
 
+interface Member {
+  user_id: string;
+  profiles: {
+    full_name: string | null;
+    avatar_url: string | null;
+  } | null;
+}
+
 interface GroupChatProps {
   groupId: string;
   currentUserId: string;
+  currentUserName: string | null;
+  members: Member[];
 }
 
-export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
+function formatDateLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
+
+/** Render message content, highlighting @mentions */
+function renderContent(content: string, currentUserName: string | null) {
+  const parts = content.split(/(@\S+)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("@")) {
+      const isMe = currentUserName && part === `@${currentUserName}`;
+      return (
+        <span
+          key={i}
+          className={`font-semibold ${isMe ? "text-emerald-500" : "text-blue-500"}`}
+        >
+          {part}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+export function GroupChat({
+  groupId,
+  currentUserId,
+  currentUserName,
+  members,
+}: GroupChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -63,11 +108,23 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
   const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
   const [showInputEmoji, setShowInputEmoji] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [newMsgCount, setNewMsgCount] = useState(0);
+
+  // @mention state
+  const [mentionSearch, setMentionSearch] = useState<string | null>(null);
+  const [mentionedUserIds, setMentionedUserIds] = useState<Set<string>>(new Set());
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const prevMessageCountRef = useRef<number>(0);
+  const hasInitialScrolledRef = useRef(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchMessages = useCallback(async () => {
     const supabase = createClient();
@@ -114,7 +171,7 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription
+  // Realtime subscription + presence for typing indicators
   useEffect(() => {
     const supabase = createClient();
 
@@ -200,16 +257,39 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
           });
         }
       )
-      .subscribe();
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{
+          userId: string;
+          userName: string;
+          typing: boolean;
+        }>();
+        const typing = Object.values(state)
+          .flat()
+          .filter((p) => p.typing && p.userId !== currentUserId)
+          .map((p) => p.userName || "Someone");
+        setTypingUsers(typing);
+      })
+      .subscribe(async (status: string) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            userId: currentUserId,
+            userName: currentUserName ?? "",
+            typing: false,
+          });
+        }
+      });
+
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
-  }, [groupId]);
+  }, [groupId, currentUserId, currentUserName]);
 
-  // Polling fallback
+  // Polling fallback (30s — realtime is primary, polling is safety net)
   useEffect(() => {
-    const pollInterval = setInterval(fetchMessages, 5000);
+    const pollInterval = setInterval(fetchMessages, 30000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") fetchMessages();
     };
@@ -220,10 +300,41 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
     };
   }, [fetchMessages]);
 
+  // Track scroll position for jump-to-bottom button
   useEffect(() => {
-    if (prevMessageCountRef.current > 0 && messages.length > prevMessageCountRef.current) {
-      scrollToBottom();
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      setIsScrolledUp(!nearBottom);
+      if (nearBottom) setNewMsgCount(0);
+    };
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    if (!hasInitialScrolledRef.current) {
+      messagesEndRef.current?.scrollIntoView();
+      hasInitialScrolledRef.current = true;
+      prevMessageCountRef.current = messages.length;
+      return;
     }
+
+    if (messages.length > prevMessageCountRef.current) {
+      const el = scrollContainerRef.current;
+      if (el) {
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        if (isNearBottom) {
+          scrollToBottom();
+        } else {
+          setNewMsgCount((c) => c + (messages.length - prevMessageCountRef.current));
+        }
+      }
+    }
+
     prevMessageCountRef.current = messages.length;
   }, [messages]);
 
@@ -231,13 +342,79 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
     if (editingId && editInputRef.current) editInputRef.current.focus();
   }, [editingId]);
 
+  // Detect @mention trigger in the input
+  const handleInputChange = (value: string) => {
+    setNewMessage(value);
+
+    // Find active @mention at end of string: last @ not followed by a space
+    const match = value.match(/@([^\s]*)$/);
+    if (match) {
+      setMentionSearch(match[1]);
+    } else {
+      setMentionSearch(null);
+    }
+
+    // Typing indicator via presence
+    if (channelRef.current) {
+      channelRef.current.track({
+        userId: currentUserId,
+        userName: currentUserName ?? "",
+        typing: true,
+      });
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        channelRef.current?.track({
+          userId: currentUserId,
+          userName: currentUserName ?? "",
+          typing: false,
+        });
+      }, 2000);
+    }
+  };
+
+  const filteredMembers = mentionSearch !== null
+    ? members.filter((m) => {
+        const name = m.profiles?.full_name ?? "";
+        return (
+          m.user_id !== currentUserId &&
+          name.toLowerCase().includes(mentionSearch.toLowerCase())
+        );
+      })
+    : [];
+
+  const handleMentionSelect = (member: Member) => {
+    const name = member.profiles?.full_name ?? "";
+    const updated = newMessage.replace(/@([^\s]*)$/, `@${name} `);
+    setNewMessage(updated);
+    setMentionSearch(null);
+    setMentionedUserIds((prev) => new Set([...prev, member.user_id]));
+    inputRef.current?.focus();
+  };
+
+  const handleScrollToBottom = () => {
+    scrollToBottom();
+    setNewMsgCount(0);
+    setIsScrolledUp(false);
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
 
     const content = newMessage.trim();
+    const mentionIds = Array.from(mentionedUserIds);
     setNewMessage("");
+    setMentionSearch(null);
+    setMentionedUserIds(new Set());
     setSending(true);
+
+    // Clear typing indicator immediately on send
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    channelRef.current?.track({
+      userId: currentUserId,
+      userName: currentUserName ?? "",
+      typing: false,
+    });
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg: Message = {
@@ -250,7 +427,7 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
     setMessages((prev) => [...prev, optimisticMsg]);
 
     try {
-      await sendGroupMessage(groupId, content);
+      await sendGroupMessage(groupId, content, mentionIds);
       const supabase = createClient();
       const { data: latest } = await supabase
         .from("group_messages")
@@ -278,7 +455,7 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
     async (messageId: string) => {
       if (!editContent.trim()) return;
       try {
-        await editGroupMessage(messageId, editContent.trim());
+        await editGroupMessage(messageId, editContent.trim(), groupId);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId ? { ...m, content: editContent.trim(), is_edited: true } : m
@@ -290,19 +467,19 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
         toast.error(err instanceof Error ? err.message : "Failed to edit message");
       }
     },
-    [editContent]
+    [editContent, groupId]
   );
 
   const handleDelete = useCallback(async (messageId: string) => {
     try {
-      await deleteGroupMessage(messageId);
+      await deleteGroupMessage(messageId, groupId);
       setMessages((prev) =>
         prev.map((m) => (m.id === messageId ? { ...m, content: "", is_deleted: true } : m))
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete message");
     }
-  }, []);
+  }, [groupId]);
 
   const handleReaction = useCallback(
     async (messageId: string, emoji: string) => {
@@ -349,7 +526,11 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
 
   const getInitials = (name: string | null) =>
     name
-      ? name.split(" ").map((n) => n[0]).join("").toUpperCase()
+      ? name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
       : "?";
 
   const getGroupedReactions = (messageId: string) => {
@@ -364,10 +545,12 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
   };
 
   const isAnyPickerOpen = emojiPickerMsgId !== null || showInputEmoji;
+  const showMentionMenu = mentionSearch !== null && filteredMembers.length > 0;
+  const charsLeft = 2000 - newMessage.length;
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Dismiss overlay */}
+      {/* Dismiss overlay for emoji pickers */}
       {isAnyPickerOpen && (
         <div
           className="fixed inset-0 z-40"
@@ -381,24 +564,48 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
       {/* Messages */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto space-y-3 p-4 min-h-0"
+        className="flex-1 overflow-y-auto p-4 min-h-0 chat-texture"
       >
         {messages.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-8">
             No messages yet. Say hello to the group!
           </p>
         )}
-        {messages.map((msg) => {
+        {messages.map((msg, index) => {
+          const prevMsg = messages[index - 1];
+          const isGrouped =
+            !msg.is_system_message &&
+            !!prevMsg &&
+            !prevMsg.is_system_message &&
+            prevMsg.user_id === msg.user_id &&
+            !msg.id.startsWith("temp-") &&
+            new Date(msg.created_at).getTime() -
+              new Date(prevMsg.created_at).getTime() <
+              2 * 60 * 1000;
+
+          const msgDate = new Date(msg.created_at).toDateString();
+          const prevMsgDate = prevMsg ? new Date(prevMsg.created_at).toDateString() : null;
+          const showDateSeparator = msgDate !== prevMsgDate;
+
           if (msg.is_system_message) {
             return (
-              <div key={msg.id} className="flex justify-center my-2">
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 max-w-[85%] text-center">
-                  <p className="text-xs text-amber-800 dark:text-amber-200 whitespace-pre-line">
-                    {msg.content}
-                  </p>
-                  <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                    {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-                  </p>
+              <div key={msg.id}>
+                {showDateSeparator && (
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{formatDateLabel(msg.created_at)}</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                )}
+                <div className="flex justify-center my-3">
+                  <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 max-w-[85%] text-center">
+                    <p className="text-xs text-amber-800 dark:text-amber-200 whitespace-pre-line">
+                      {msg.content}
+                    </p>
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                      {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                    </p>
+                  </div>
                 </div>
               </div>
             );
@@ -408,22 +615,32 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
           const name = msg.profiles?.full_name ?? "Unknown";
           const isEditing = editingId === msg.id;
           const grouped = getGroupedReactions(msg.id);
+          const isSending = msg.id.startsWith("temp-");
 
           return (
+            <div key={msg.id}>
+              {showDateSeparator && (
+                <div className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{formatDateLabel(msg.created_at)}</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              )}
             <div
-              key={msg.id}
-              className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""}`}
+              className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""} ${isGrouped ? "mt-0.5" : "mt-3"} ${isSending ? "opacity-60" : ""}`}
               onMouseEnter={() => setHoveredId(msg.id)}
               onMouseLeave={() => setHoveredId(null)}
             >
               {!isOwn && (
-                <Avatar className="h-7 w-7 shrink-0 mt-1">
-                  <AvatarImage src={msg.profiles?.avatar_url ?? undefined} />
-                  <AvatarFallback className="text-[10px]">{getInitials(name)}</AvatarFallback>
-                </Avatar>
+                isGrouped
+                  ? <div className="w-7 shrink-0" />
+                  : <Avatar className="h-7 w-7 shrink-0 mt-1">
+                      <AvatarImage src={msg.profiles?.avatar_url ?? undefined} />
+                      <AvatarFallback className="text-[10px]">{getInitials(name)}</AvatarFallback>
+                    </Avatar>
               )}
               <div className={`max-w-[75%] relative ${isOwn ? "items-end" : "items-start"}`}>
-                {!isOwn && (
+                {!isOwn && !isGrouped && (
                   <p className="text-xs text-muted-foreground mb-0.5">{name}</p>
                 )}
 
@@ -436,7 +653,9 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => setEmojiPickerMsgId(emojiPickerMsgId === msg.id ? null : msg.id)}
+                      onClick={() =>
+                        setEmojiPickerMsgId(emojiPickerMsgId === msg.id ? null : msg.id)
+                      }
                     >
                       <Smile className="h-3.5 w-3.5" />
                     </Button>
@@ -446,7 +665,10 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => { setEditingId(msg.id); setEditContent(msg.content); }}
+                          onClick={() => {
+                            setEditingId(msg.id);
+                            setEditContent(msg.content);
+                          }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -465,9 +687,13 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
 
                 {/* Emoji picker */}
                 {emojiPickerMsgId === msg.id && (
-                  <div className={`absolute bottom-full mb-1 z-50 ${isOwn ? "right-0" : "left-0"}`}>
+                  <div
+                    className={`absolute bottom-full mb-1 z-50 ${isOwn ? "right-0" : "left-0"}`}
+                  >
                     <EmojiPicker
-                      onEmojiSelect={(emoji: { native: string }) => handleReaction(msg.id, emoji.native)}
+                      onEmojiSelect={(emoji: { native: string }) =>
+                        handleReaction(msg.id, emoji.native)
+                      }
                       theme="auto"
                       previewPosition="none"
                       skinTonePosition="none"
@@ -488,20 +714,40 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                       onChange={(e) => setEditContent(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleEdit(msg.id);
-                        if (e.key === "Escape") { setEditingId(null); setEditContent(""); }
+                        if (e.key === "Escape") {
+                          setEditingId(null);
+                          setEditContent("");
+                        }
                       }}
                       className="text-sm h-8"
                     />
-                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => handleEdit(msg.id)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => handleEdit(msg.id)}
+                    >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => { setEditingId(null); setEditContent(""); }}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditContent("");
+                      }}
+                    >
                       <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ) : (
-                  <div className={`rounded-lg px-3 py-1.5 text-sm ${isOwn ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-                    {msg.content}
+                  <div
+                    className={`rounded-lg px-3 py-1.5 text-sm whitespace-pre-wrap break-words ${
+                      isOwn ? "bg-emerald-600 text-white dark:bg-emerald-600" : "bg-muted"
+                    }`}
+                  >
+                    {renderContent(msg.content, currentUserName)}
                   </div>
                 )}
 
@@ -513,7 +759,9 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                         key={r.emoji}
                         onClick={() => handleReaction(msg.id, r.emoji)}
                         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors ${
-                          r.userReacted ? "bg-primary/10 border-primary/30" : "bg-muted border-transparent hover:border-border"
+                          r.userReacted
+                            ? "bg-primary/10 border-primary/30"
+                            : "bg-muted border-transparent hover:border-border"
                         }`}
                       >
                         <span>{r.emoji}</span>
@@ -523,22 +771,77 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
                   </div>
                 )}
 
-                {/* Timestamp */}
-                {!isEditing && (
+                {/* Timestamp — hidden on grouped messages unless hovered */}
+                {!isEditing && (!isGrouped || hoveredId === msg.id) && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-                    {msg.is_edited && !msg.is_deleted && <span className="ml-1">(edited)</span>}
+                    {msg.is_edited && !msg.is_deleted && (
+                      <span className="ml-1">(edited)</span>
+                    )}
                   </p>
                 )}
               </div>
+            </div>
             </div>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Jump to bottom button */}
+      {isScrolledUp && (
+        <div className="absolute bottom-[5.5rem] left-0 right-0 flex justify-center z-20 pointer-events-none">
+          <button
+            onClick={handleScrollToBottom}
+            className="pointer-events-auto flex items-center gap-1.5 bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg hover:bg-emerald-700 transition-colors"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+            {newMsgCount > 0
+              ? `${newMsgCount} new ${newMsgCount === 1 ? "message" : "messages"}`
+              : "Scroll to bottom"}
+          </button>
+        </div>
+      )}
+
+      {/* Typing indicator */}
+      {typingUsers.length > 0 && (
+        <div className="px-4 py-1">
+          <p className="text-xs text-muted-foreground italic">
+            {typingUsers.length === 1
+              ? `${typingUsers[0]} is typing...`
+              : typingUsers.length === 2
+              ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+              : "Several people are typing..."}
+          </p>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-4 border-t bg-background relative">
+        {/* @mention dropdown */}
+        {showMentionMenu && (
+          <div className="absolute bottom-full left-4 right-4 mb-1 z-50 bg-background border rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+            {filteredMembers.map((member) => (
+              <button
+                key={member.user_id}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left transition-colors"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // prevent input blur before click
+                  handleMentionSelect(member);
+                }}
+              >
+                <Avatar className="h-6 w-6 shrink-0">
+                  <AvatarImage src={member.profiles?.avatar_url ?? undefined} />
+                  <AvatarFallback className="text-[10px]">
+                    {getInitials(member.profiles?.full_name ?? null)}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{member.profiles?.full_name ?? "Unknown"}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {showInputEmoji && (
           <div className="absolute bottom-full mb-2 left-4 z-50">
             <EmojiPicker
@@ -553,27 +856,46 @@ export function GroupChat({ groupId, currentUserId }: GroupChatProps) {
             />
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-2 items-center">
+        <form onSubmit={handleSend} className="flex gap-2 items-end">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="shrink-0"
+            className="shrink-0 mb-0.5"
             onClick={() => setShowInputEmoji(!showInputEmoji)}
           >
             <Smile className="h-5 w-5" />
           </Button>
-          <Input
+          <Textarea
             ref={inputRef}
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Message the group..."
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+              if (e.key === "Escape") setMentionSearch(null);
+            }}
+            placeholder="Message the group... (type @ to mention)"
             disabled={sending}
+            maxLength={2000}
+            rows={1}
+            className="min-h-[40px] max-h-[120px] resize-none py-2.5 overflow-y-auto"
           />
-          <Button type="submit" size="icon" disabled={sending || !newMessage.trim()}>
+          <Button type="submit" size="icon" className="shrink-0 mb-0.5" disabled={sending || !newMessage.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
+        {charsLeft <= 400 && (
+          <p
+            className={`text-[10px] text-right mt-1 ${
+              charsLeft <= 100 ? "text-destructive" : "text-muted-foreground"
+            }`}
+          >
+            {charsLeft} remaining
+          </p>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { GroupCard } from "@/components/groups/group-card";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus, Users } from "lucide-react";
@@ -47,35 +48,43 @@ export default async function GroupsPage() {
     .filter(Boolean) ?? [];
 
   return (
-    <div className="container mx-auto py-6 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">My Groups</h1>
-        <Link href="/groups/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Group
-          </Button>
-        </Link>
-      </div>
-
-      {groups.length === 0 ? (
-        <div className="text-center py-20">
-          <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground text-lg mb-2">No groups yet</p>
-          <p className="text-sm text-muted-foreground mb-6">
-            Create a private group for your regular crew, or ask someone to share an invite link.
-          </p>
+    <div>
+      <PageHeader
+        title="My Groups"
+        subtitle="Your private recurring groups and crews."
+        badge={groups.length > 0 ? `${groups.length} group${groups.length !== 1 ? "s" : ""}` : undefined}
+        action={
           <Link href="/groups/new">
-            <Button>Create your first group</Button>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Group
+            </Button>
           </Link>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {groups.map((group: any) => (
-            <GroupCard key={group.id} group={group} />
-          ))}
-        </div>
-      )}
+        }
+      />
+
+      <div className="container mx-auto py-6 px-4">
+        {groups.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Users className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <p className="text-lg font-semibold mb-1">No groups yet</p>
+            <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+              Create a private group for your regular crew, or ask someone to share an invite link.
+            </p>
+            <Link href="/groups/new">
+              <Button>Create your first group</Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {groups.map((group: any) => (
+              <GroupCard key={group.id} group={group} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

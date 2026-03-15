@@ -4,7 +4,7 @@
 
 This document defines how to separate the current Next.js codebase into a scalable frontend/backend base without prematurely breaking it into microservices.
 
-The goal is to:
+The goal is to :
 
 - keep one deployable application for now
 - separate UI concerns from backend business logic

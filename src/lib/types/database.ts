@@ -13,6 +13,7 @@ export interface Profile {
   bio: string | null;
   avatar_url: string | null;
   date_of_birth: string | null;
+  weight_kg: number | null;
   profile_complete: boolean;
   created_at: string;
   updated_at: string;
@@ -195,4 +196,83 @@ export interface RecurringGroupWithDetails extends RecurringGroup {
   group_members: (GroupMember & {
     profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
   })[];
+}
+
+// ---- Match Tracking ----
+
+export type MatchFormat = "singles" | "doubles";
+export type MatchStatus = "completed" | "cancelled";
+export type MatchupMode = "rank_based" | "random" | "manual";
+
+export interface Match {
+  id: string;
+  group_id: string;
+  session_id: string | null;
+  format: MatchFormat;
+  status: MatchStatus;
+  logged_by: string;
+  played_at: string;
+  created_at: string;
+}
+
+export interface MatchPlayer {
+  id: string;
+  match_id: string;
+  player_id: string;
+  team: 1 | 2;
+  score_set1: number | null;
+  score_set2: number | null;
+  score_set3: number | null;
+  is_winner: boolean;
+  created_at: string;
+}
+
+export interface PlayerGroupStats {
+  id: string;
+  player_id: string;
+  group_id: string;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  points: number;
+  rank: number | null;
+  is_provisional: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MatchupCourt {
+  court: number;
+  team1: string[]; // player IDs
+  team2: string[]; // player IDs
+}
+
+export interface Matchup {
+  id: string;
+  group_id: string;
+  session_id: string | null;
+  generated_by: string;
+  mode: MatchupMode;
+  courts: MatchupCourt[];
+  created_at: string;
+}
+
+export interface MatchWithPlayers extends Match {
+  match_players: (MatchPlayer & {
+    profiles: Pick<Profile, "id" | "full_name" | "avatar_url">;
+  })[];
+}
+
+export interface LeaderboardEntry extends PlayerGroupStats {
+  profiles: Pick<Profile, "id" | "full_name" | "avatar_url">;
+}
+
+export interface MemberWithStats {
+  user_id: string;
+  role: GroupMemberRole;
+  full_name: string | null;
+  avatar_url: string | null;
+  rank: number | null;
+  points: number;
+  is_provisional: boolean;
 }
