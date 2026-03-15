@@ -4,7 +4,22 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import type { GameType, SkillLevel } from "@/lib/types/database";
+import type { GameType, PlayerPreferences, SkillLevel } from "@/lib/types/database";
+
+function parsePlayerPreferences(formData: FormData): PlayerPreferences | null {
+  const maleSlots = parseInt(formData.get("male_slots") as string);
+  const femaleSlots = parseInt(formData.get("female_slots") as string);
+  const minAge = parseInt(formData.get("min_age") as string);
+  const maxAge = parseInt(formData.get("max_age") as string);
+
+  const prefs: PlayerPreferences = {};
+  if (!isNaN(maleSlots) && maleSlots > 0) prefs.male_slots = maleSlots;
+  if (!isNaN(femaleSlots) && femaleSlots > 0) prefs.female_slots = femaleSlots;
+  if (!isNaN(minAge) && minAge > 0) prefs.min_age = minAge;
+  if (!isNaN(maxAge) && maxAge > 0) prefs.max_age = maxAge;
+
+  return Object.keys(prefs).length > 0 ? prefs : null;
+}
 
 export async function createSession(formData: FormData) {
   const supabase = await createClient();
@@ -14,18 +29,39 @@ export async function createSession(formData: FormData) {
 
   if (!user) throw new Error("Not authenticated");
 
+  const date = formData.get("date") as string;
+  const startTime = formData.get("start_time") as string;
+  const maxPlayers = parseInt(formData.get("max_players") as string);
+  const playerPreferences = parsePlayerPreferences(formData);
+
+  // Validate date is not in the past
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
+  if (date < todayStr) {
+    throw new Error("Cannot create a session in the past");
+  }
+
+  // Validate slot totals
+  if (playerPreferences) {
+    const slotTotal = (playerPreferences.male_slots ?? 0) + (playerPreferences.female_slots ?? 0);
+    if (slotTotal > maxPlayers) {
+      throw new Error(`Gender slot total (${slotTotal}) exceeds max players (${maxPlayers})`);
+    }
+  }
+
   const sessionData = {
     creator_id: user.id,
     title: formData.get("title") as string,
     description: (formData.get("description") as string) || null,
-    date: formData.get("date") as string,
-    start_time: formData.get("start_time") as string,
+    date,
+    start_time: startTime,
     end_time: formData.get("end_time") as string,
     location: formData.get("location") as string,
     city: formData.get("city") as string,
     skill_level: formData.get("skill_level") as SkillLevel,
     game_type: formData.get("game_type") as GameType,
-    max_players: parseInt(formData.get("max_players") as string),
+    max_players: maxPlayers,
+    player_preferences: playerPreferences,
   };
 
   const { data, error } = await supabase
@@ -67,6 +103,48 @@ export async function createSession(formData: FormData) {
 
   revalidatePath("/sessions");
   redirect(`/sessions/${data.id}`);
+}
+
+function shiftTime(timeStr: string, minutesDelta: number): string {
+  const [h, m] = timeStr.split(":").map(Number);
+  const total = Math.max(0, Math.min(1439, h * 60 + m + minutesDelta));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+export async function checkOverlappingSessions({
+  city,
+  date,
+  start_time,
+  end_time,
+  excludeId,
+}: {
+  city: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  excludeId?: string;
+}): Promise<{ start_time: string; end_time: string }[]> {
+  const supabase = await createClient();
+
+  // 2-hour buffer — sessions within 2 hours of each other compete for the same players
+  const bufferedStart = shiftTime(start_time, -120);
+  const bufferedEnd = shiftTime(end_time, +120);
+
+  let query = supabase
+    .from("sessions")
+    .select("start_time, end_time")
+    .eq("city", city)
+    .eq("date", date)
+    .in("status", ["open", "full"])
+    .lt("start_time", bufferedEnd)
+    .gt("end_time", bufferedStart);
+
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data } = await query;
+  return data ?? [];
 }
 
 export async function cleanupExpiredSessions() {
@@ -267,6 +345,7 @@ export async function editSession(
     skill_level: formData.get("skill_level") as SkillLevel,
     game_type: formData.get("game_type") as GameType,
     max_players: parseInt(formData.get("max_players") as string),
+    player_preferences: parsePlayerPreferences(formData),
   };
 
   // Detect what changed
@@ -281,9 +360,21 @@ export async function editSession(
   if (session.skill_level !== newData.skill_level) changes.push(`Skill Level: ${newData.skill_level}`);
   if (session.game_type !== newData.game_type) changes.push(`Game Type: ${newData.game_type}`);
   if (session.max_players !== newData.max_players) changes.push(`Max Players: ${newData.max_players}`);
+  if (JSON.stringify(session.player_preferences ?? null) !== JSON.stringify(newData.player_preferences)) changes.push("Player preferences updated");
 
   if (changes.length === 0) {
     return { success: false, error: "No changes detected" };
+  }
+
+  // Validate slot totals don't exceed max_players
+  if (newData.player_preferences) {
+    const slotTotal = (newData.player_preferences.male_slots ?? 0) + (newData.player_preferences.female_slots ?? 0);
+    if (slotTotal > newData.max_players) {
+      return {
+        success: false,
+        error: `Gender slot total (${slotTotal}) exceeds max players (${newData.max_players})`,
+      };
+    }
   }
 
   // Validate max_players >= current participant count

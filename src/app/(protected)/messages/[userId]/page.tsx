@@ -18,6 +18,9 @@ export default async function DirectMessagePage({
 
   if (!user) redirect("/login");
 
+  // Prevent messaging yourself
+  if (userId === user.id) redirect("/messages");
+
   // Fetch the other user's profile
   const { data: otherUser } = await supabase
     .from("profiles")

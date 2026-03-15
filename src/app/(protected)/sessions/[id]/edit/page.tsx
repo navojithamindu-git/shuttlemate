@@ -45,6 +45,7 @@ export default async function EditSessionPage({
     skill_level: session.skill_level,
     game_type: session.game_type,
     max_players: session.max_players,
+    player_preferences: session.player_preferences ?? null,
   };
 
   return (

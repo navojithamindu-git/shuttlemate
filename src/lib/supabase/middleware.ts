@@ -29,13 +29,24 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const { pathname } = request.nextUrl;
+
+  // /sessions and /sessions/<uuid> are publicly accessible
+  const isPublicSessionsPath =
+    pathname === "/sessions" ||
+    (pathname.startsWith("/sessions/") &&
+      pathname.split("/").length === 3 &&
+      !pathname.endsWith("/new") &&
+      !pathname.endsWith("/edit"));
+
   // Redirect unauthenticated users away from protected routes
   if (
     !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/signup") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    request.nextUrl.pathname !== "/"
+    !isPublicSessionsPath &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/signup") &&
+    !pathname.startsWith("/auth") &&
+    pathname !== "/"
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

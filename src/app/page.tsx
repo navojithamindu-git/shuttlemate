@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
@@ -122,9 +123,15 @@ const features = [
 ];
 
 export default async function LandingPage() {
-  // Fetch real stats from the database
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) redirect("/dashboard");
+
+  // Fetch real stats from the database
   const [
     { count: playerCount },
     { count: sessionCount },
@@ -134,10 +141,6 @@ export default async function LandingPage() {
     supabase.from("sessions").select("*", { count: "exact", head: true }),
     supabase.from("sessions").select("city"),
   ]);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const uniqueCities = new Set(cityData?.map((s) => s.city) ?? []).size;
 
@@ -155,22 +158,14 @@ export default async function LandingPage() {
           <span className="font-bold text-lg">ShuttleMates</span>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            {user ? (
-              <Link href="/sessions">
-                <Button size="sm">Dashboard</Button>
-              </Link>
-            ) : (
-              <>
-                <Link href="/login">
-                  <Button variant="ghost" size="sm">
-                    Sign in
-                  </Button>
-                </Link>
-                <Link href="/signup">
-                  <Button size="sm">Get Started</Button>
-                </Link>
-              </>
-            )}
+            <Link href="/login">
+              <Button variant="ghost" size="sm">
+                Sign in
+              </Button>
+            </Link>
+            <Link href="/signup">
+              <Button size="sm">Get Started</Button>
+            </Link>
           </div>
         </div>
       </header>
@@ -267,43 +262,21 @@ export default async function LandingPage() {
             seasoned pro, your next game is just a click away.
           </p>
           <div className="flex gap-4 justify-center flex-col sm:flex-row">
-            {user ? (
-              <>
-                <Link href="/sessions">
-                  <Button size="lg" className="w-full sm:w-auto text-base px-8">
-                    Browse Sessions
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/sessions/new">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full sm:w-auto text-base px-8"
-                  >
-                    Create Session
-                  </Button>
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link href="/signup">
-                  <Button size="lg" className="w-full sm:w-auto text-base px-8">
-                    Get Started Free
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/sessions">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full sm:w-auto text-base px-8"
-                  >
-                    Browse Sessions
-                  </Button>
-                </Link>
-              </>
-            )}
+            <Link href="/signup">
+              <Button size="lg" className="w-full sm:w-auto text-base px-8">
+                Get Started Free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/sessions">
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full sm:w-auto text-base px-8"
+              >
+                Browse Sessions
+              </Button>
+            </Link>
           </div>
 
           {/* Real Stats */}

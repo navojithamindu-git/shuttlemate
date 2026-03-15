@@ -20,17 +20,26 @@ export function JoinLeaveButton({
   isFull,
 }: JoinLeaveButtonProps) {
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
-  const handleAction = async () => {
+  const handleLeave = async () => {
     setLoading(true);
     try {
-      if (isJoined) {
-        await leaveSession(sessionId);
-        toast.success("You left the session");
-      } else {
-        await joinSession(sessionId);
-        toast.success("You joined the session!");
-      }
+      await leaveSession(sessionId);
+      toast.success("You left the session");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+      setConfirming(false);
+    }
+  };
+
+  const handleJoin = async () => {
+    setLoading(true);
+    try {
+      await joinSession(sessionId);
+      toast.success("You joined the session!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -50,9 +59,23 @@ export function JoinLeaveButton({
     );
   }
 
+  if (isJoined && confirming) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Leave session?</span>
+        <Button size="sm" variant="destructive" disabled={loading} onClick={handleLeave} className="h-8">
+          {loading ? "..." : "Yes, leave"}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={loading} onClick={() => setConfirming(false)} className="h-8">
+          Cancel
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <Button
-      onClick={handleAction}
+      onClick={isJoined ? () => setConfirming(true) : handleJoin}
       variant={isJoined ? "destructive" : "default"}
       disabled={loading}
     >

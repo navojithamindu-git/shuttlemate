@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -10,9 +11,28 @@ import { CancelSessionButton } from "@/components/sessions/cancel-session-button
 import { EditSessionButton } from "@/components/sessions/edit-session-button";
 import { ConfirmationBanner } from "@/components/sessions/confirmation-banner";
 import { SessionChat } from "@/components/sessions/session-chat";
-import { Calendar, Clock, MapPin, Users } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, UserCheck } from "lucide-react";
+import type { PlayerPreferences } from "@/lib/types/database";
+
+function formatPreferences(prefs: PlayerPreferences): string {
+  const parts: string[] = [];
+  if (prefs.male_slots || prefs.female_slots) {
+    const slots: string[] = [];
+    if (prefs.male_slots) slots.push(`${prefs.male_slots}M`);
+    if (prefs.female_slots) slots.push(`${prefs.female_slots}F`);
+    parts.push(slots.join(" + "));
+  }
+  if (prefs.min_age || prefs.max_age) {
+    if (prefs.min_age && prefs.max_age) parts.push(`Age ${prefs.min_age}–${prefs.max_age}`);
+    else if (prefs.min_age) parts.push(`Age ${prefs.min_age}+`);
+    else if (prefs.max_age) parts.push(`Age up to ${prefs.max_age}`);
+  }
+  return parts.join(" · ");
+}
 import { format } from "date-fns";
 import { TimingBadge } from "@/components/sessions/timing-badge";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default async function SessionDetailPage({
   params,
@@ -26,7 +46,9 @@ export default async function SessionDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: session } = await supabase
+  // Use admin client so session data loads for both authenticated and guest users
+  const adminClient = createAdminClient();
+  const { data: session } = await adminClient
     .from("sessions")
     .select(
       `
@@ -37,7 +59,7 @@ export default async function SessionDetailPage({
         joined_at,
         confirmed,
         confirmation_deadline,
-        profiles(id, full_name, avatar_url, skill_level)
+        profiles(*)
       )
     `
     )
@@ -67,6 +89,8 @@ export default async function SessionDetailPage({
       p.user_id !== session.creator_id && p.confirmed === false
   );
 
+  // A session is expired if its start time has already passed, regardless of DB status
+  const isExpired = new Date(session.date + "T" + session.start_time) < new Date();
 
   const creatorName = session.creator?.full_name ?? "Unknown";
   const creatorInitials = creatorName
@@ -146,6 +170,15 @@ export default async function SessionDetailPage({
                   </p>
                 </div>
               </div>
+              {session.player_preferences && (
+                <div className="flex items-center gap-3">
+                  <UserCheck className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Host prefers</p>
+                    <p className="font-medium">{formatPreferences(session.player_preferences)}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Separator />
@@ -167,19 +200,27 @@ export default async function SessionDetailPage({
             <Separator />
 
             {/* Action buttons */}
-            {session.status !== "cancelled" && session.status !== "completed" && (
+            {session.status !== "cancelled" && session.status !== "completed" && !isExpired && (
               <div className="flex gap-3">
-                <JoinLeaveButton
-                  sessionId={session.id}
-                  isJoined={isJoined ?? false}
-                  isCreator={isCreator}
-                  isFull={isFull}
-                />
-                {isCreator && (
+                {user ? (
                   <>
-                    <EditSessionButton sessionId={session.id} />
-                    <CancelSessionButton sessionId={session.id} />
+                    <JoinLeaveButton
+                      sessionId={session.id}
+                      isJoined={isJoined ?? false}
+                      isCreator={isCreator}
+                      isFull={isFull}
+                    />
+                    {isCreator && (
+                      <>
+                        <EditSessionButton sessionId={session.id} />
+                        <CancelSessionButton sessionId={session.id} />
+                      </>
+                    )}
                   </>
+                ) : (
+                  <Link href={`/login?redirect=/sessions/${session.id}`}>
+                    <Button>Sign in to join</Button>
+                  </Link>
                 )}
               </div>
             )}
@@ -210,9 +251,21 @@ export default async function SessionDetailPage({
           </CardContent>
         </Card>
 
-        {/* Session Chat - only for upcoming sessions */}
-        {(isJoined || isCreator) && user && session.status !== "cancelled" && session.status !== "completed" && (
+        {/* Session Chat - only for public upcoming sessions; group sessions use group chat */}
+        {(isJoined || isCreator) && user && session.status !== "cancelled" && session.status !== "completed" && !isExpired && !session.group_id && (
           <SessionChat sessionId={session.id} currentUserId={user.id} />
+        )}
+        {session.group_id && (isJoined || isCreator) && user && (
+          <Card>
+            <CardContent className="pt-6 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Chat for this session lives in your group.
+              </p>
+              <Link href={`/groups/${session.group_id}`}>
+                <Button variant="outline" size="sm">Open Group Chat</Button>
+              </Link>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

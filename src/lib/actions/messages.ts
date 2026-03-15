@@ -1,7 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+
+const MAX_MESSAGE_LENGTH = 2000;
 
 export async function sendSessionMessage(sessionId: string, content: string) {
   const supabase = await createClient();
@@ -13,6 +17,8 @@ export async function sendSessionMessage(sessionId: string, content: string) {
 
   const trimmed = content.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase.from("session_messages").insert({
     session_id: sessionId,
@@ -35,6 +41,8 @@ export async function sendDirectMessage(receiverId: string, content: string) {
 
   const trimmed = content.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase.from("direct_messages").insert({
     sender_id: user.id,
@@ -58,6 +66,16 @@ export async function editDirectMessage(messageId: string, newContent: string) {
 
   const trimmed = newContent.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
+
+  // Fetch receiver before update so we can revalidate their conversation path
+  const { data: existing } = await supabase
+    .from("direct_messages")
+    .select("receiver_id")
+    .eq("id", messageId)
+    .eq("sender_id", user.id)
+    .single();
 
   const { error } = await supabase
     .from("direct_messages")
@@ -68,6 +86,7 @@ export async function editDirectMessage(messageId: string, newContent: string) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/messages");
+  if (existing) revalidatePath(`/messages/${existing.receiver_id}`);
 }
 
 export async function deleteDirectMessage(messageId: string) {
@@ -91,7 +110,8 @@ export async function deleteDirectMessage(messageId: string) {
 
 export async function editSessionMessage(
   messageId: string,
-  newContent: string
+  newContent: string,
+  sessionId: string
 ) {
   const supabase = await createClient();
   const {
@@ -102,6 +122,8 @@ export async function editSessionMessage(
 
   const trimmed = newContent.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
 
   const { error } = await supabase
     .from("session_messages")
@@ -110,9 +132,11 @@ export async function editSessionMessage(
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
+
+  revalidatePath(`/sessions/${sessionId}`);
 }
 
-export async function deleteSessionMessage(messageId: string) {
+export async function deleteSessionMessage(messageId: string, sessionId: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -127,10 +151,150 @@ export async function deleteSessionMessage(messageId: string) {
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
+
+  revalidatePath(`/sessions/${sessionId}`);
+}
+
+export async function sendGroupMessage(
+  groupId: string,
+  content: string,
+  mentionedUserIds?: string[]
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const trimmed = content.trim();
+  if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
+
+  const { error } = await supabase.from("group_messages").insert({
+    group_id: groupId,
+    user_id: user.id,
+    content: trimmed,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/groups/${groupId}`);
+
+  // Send push notifications in background
+  after(async () => {
+    try {
+      const admin = createAdminClient();
+
+      const [{ data: sender }, { data: group }, { data: members }] =
+        await Promise.all([
+          admin
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .single(),
+          admin
+            .from("recurring_groups")
+            .select("name")
+            .eq("id", groupId)
+            .single(),
+          admin
+            .from("group_members")
+            .select("user_id")
+            .eq("group_id", groupId)
+            .neq("user_id", user.id),
+        ]);
+
+      if (!members || members.length === 0) return;
+
+      const senderName = sender?.full_name ?? "Someone";
+      const groupName = group?.name ?? "ShuttleMates";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const url = `${appUrl}/groups/${groupId}`;
+      const preview = trimmed.length > 80 ? trimmed.slice(0, 77) + "..." : trimmed;
+
+      const allMemberIds = members.map((m) => m.user_id);
+      const mentionedIds = (mentionedUserIds ?? []).filter(
+        (id) => id !== user.id
+      );
+      const otherIds = allMemberIds.filter((id) => !mentionedIds.includes(id));
+
+      const { sendPushToUsers } = await import("@/lib/actions/push");
+
+      await Promise.all([
+        mentionedIds.length > 0
+          ? sendPushToUsers(mentionedIds, {
+              title: `${senderName} mentioned you in ${groupName}`,
+              body: preview,
+              url,
+              tag: `group-mention-${groupId}`,
+            })
+          : Promise.resolve(),
+        otherIds.length > 0
+          ? sendPushToUsers(otherIds, {
+              title: groupName,
+              body: `${senderName}: ${preview}`,
+              url,
+              tag: `group-chat-${groupId}`,
+            })
+          : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error("Failed to send push notifications:", err);
+    }
+  });
+}
+
+export async function editGroupMessage(
+  messageId: string,
+  newContent: string,
+  groupId: string
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const trimmed = newContent.trim();
+  if (!trimmed) throw new Error("Message cannot be empty");
+  if (trimmed.length > MAX_MESSAGE_LENGTH)
+    throw new Error(`Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`);
+
+  const { error } = await supabase
+    .from("group_messages")
+    .update({ content: trimmed, is_edited: true })
+    .eq("id", messageId)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/groups/${groupId}`);
+}
+
+export async function deleteGroupMessage(messageId: string, groupId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("group_messages")
+    .update({ content: "", is_deleted: true })
+    .eq("id", messageId)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/groups/${groupId}`);
 }
 
 export async function toggleReaction(
-  messageType: "direct" | "session",
+  messageType: "direct" | "session" | "group",
   messageId: string,
   emoji: string
 ) {
@@ -142,7 +306,11 @@ export async function toggleReaction(
   if (!user) throw new Error("Not authenticated");
 
   const column =
-    messageType === "direct" ? "direct_message_id" : "session_message_id";
+    messageType === "direct"
+      ? "direct_message_id"
+      : messageType === "session"
+      ? "session_message_id"
+      : "group_message_id";
 
   // Check if reaction already exists
   const { data: existing } = await supabase

@@ -12,9 +12,18 @@ export interface Profile {
   city: string | null;
   bio: string | null;
   avatar_url: string | null;
+  date_of_birth: string | null;
+  weight_kg: number | null;
   profile_complete: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface PlayerPreferences {
+  male_slots?: number;
+  female_slots?: number;
+  min_age?: number;
+  max_age?: number;
 }
 
 export interface SessionMessage {
@@ -63,6 +72,9 @@ export interface Session {
   max_players: number;
   status: SessionStatus;
   last_edited_at: string | null;
+  group_id: string | null;
+  is_private: boolean;
+  player_preferences: PlayerPreferences | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +100,7 @@ export interface SessionFormData {
   skill_level: SkillLevel;
   game_type: GameType;
   max_players: number;
+  player_preferences: PlayerPreferences | null;
 }
 
 export interface SessionWithCreator extends Session {
@@ -96,7 +109,7 @@ export interface SessionWithCreator extends Session {
 
 export interface SessionWithParticipants extends SessionWithCreator {
   session_participants: (SessionParticipant & {
-    profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
+    profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level" | "date_of_birth" | "gender">;
   })[];
 }
 
@@ -118,4 +131,148 @@ export interface AvailabilityRecurring {
   end_time: string;
   city: string;
   created_at: string;
+}
+
+// ---- Recurring Groups ----
+
+export type GroupMemberRole = "owner" | "admin" | "member";
+export type RsvpStatus = "yes" | "maybe" | "no";
+
+export interface RecurringGroup {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  location: string;
+  city: string;
+  skill_level: SkillLevel;
+  game_type: GameType;
+  max_players: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupMember {
+  id: string;
+  group_id: string;
+  user_id: string;
+  role: GroupMemberRole;
+  joined_at: string;
+}
+
+export interface GroupMessage {
+  id: string;
+  group_id: string;
+  user_id: string;
+  content: string;
+  is_edited: boolean;
+  is_deleted: boolean;
+  is_system_message: boolean;
+  created_at: string;
+}
+
+export interface GroupSessionRsvp {
+  id: string;
+  session_id: string;
+  user_id: string;
+  status: RsvpStatus;
+  updated_at: string;
+}
+
+export interface GroupInvitation {
+  id: string;
+  group_id: string;
+  token: string;
+  created_by: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface RecurringGroupWithDetails extends RecurringGroup {
+  group_members: (GroupMember & {
+    profiles: Pick<Profile, "id" | "full_name" | "avatar_url" | "skill_level">;
+  })[];
+}
+
+// ---- Match Tracking ----
+
+export type MatchFormat = "singles" | "doubles";
+export type MatchStatus = "completed" | "cancelled";
+export type MatchupMode = "rank_based" | "random" | "manual";
+
+export interface Match {
+  id: string;
+  group_id: string;
+  session_id: string | null;
+  format: MatchFormat;
+  status: MatchStatus;
+  logged_by: string;
+  played_at: string;
+  created_at: string;
+}
+
+export interface MatchPlayer {
+  id: string;
+  match_id: string;
+  player_id: string;
+  team: 1 | 2;
+  score_set1: number | null;
+  score_set2: number | null;
+  score_set3: number | null;
+  is_winner: boolean;
+  created_at: string;
+}
+
+export interface PlayerGroupStats {
+  id: string;
+  player_id: string;
+  group_id: string;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  points: number;
+  rank: number | null;
+  is_provisional: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MatchupCourt {
+  court: number;
+  team1: string[]; // player IDs
+  team2: string[]; // player IDs
+}
+
+export interface Matchup {
+  id: string;
+  group_id: string;
+  session_id: string | null;
+  generated_by: string;
+  mode: MatchupMode;
+  courts: MatchupCourt[];
+  created_at: string;
+}
+
+export interface MatchWithPlayers extends Match {
+  match_players: (MatchPlayer & {
+    profiles: Pick<Profile, "id" | "full_name" | "avatar_url">;
+  })[];
+}
+
+export interface LeaderboardEntry extends PlayerGroupStats {
+  profiles: Pick<Profile, "id" | "full_name" | "avatar_url">;
+}
+
+export interface MemberWithStats {
+  user_id: string;
+  role: GroupMemberRole;
+  full_name: string | null;
+  avatar_url: string | null;
+  rank: number | null;
+  points: number;
+  is_provisional: boolean;
 }

@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultiCityCombobox } from "@/components/ui/city-combobox";
-import type { Profile, SkillLevel } from "@/lib/types/database";
+import type { Profile, SkillLevel, Gender } from "@/lib/types/database";
 
 const SKILL_LEVELS: { value: SkillLevel; label: string; desc: string }[] = [
   { value: "Beginner", label: "Beginner", desc: "Learning basics, casual play" },
@@ -27,17 +27,23 @@ const SKILL_LEVELS: { value: SkillLevel; label: string; desc: string }[] = [
 interface ProfileFormProps {
   profile: Profile | null;
   isOnboarding?: boolean;
+  redirectTo?: string;
 }
 
-export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps) {
+export function ProfileForm({ profile, isOnboarding = false, redirectTo }: ProfileFormProps) {
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [skillLevel, setSkillLevel] = useState<SkillLevel>(
     profile?.skill_level ?? "Beginner"
   );
+  const [gender, setGender] = useState<Gender | "">(profile?.gender ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.date_of_birth ?? "");
   const [cities, setCities] = useState<string[]>(
     profile?.city ? profile.city.split(", ").filter(Boolean) : []
   );
   const [bio, setBio] = useState(profile?.bio ?? "");
+  const [weightKg, setWeightKg] = useState<string>(
+    profile?.weight_kg ? String(profile.weight_kg) : ""
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -63,8 +69,11 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
       .update({
         full_name: fullName,
         skill_level: skillLevel,
+        gender: gender || null,
+        date_of_birth: dateOfBirth || null,
         city: cities.join(", "),
         bio,
+        weight_kg: weightKg ? parseInt(weightKg) : null,
         profile_complete: true,
       })
       .eq("id", user.id);
@@ -73,7 +82,7 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
       setError(updateError.message);
       setLoading(false);
     } else {
-      router.push("/sessions");
+      router.push(redirectTo ?? "/sessions");
       router.refresh();
     }
   };
@@ -116,6 +125,32 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
           </SelectContent>
         </Select>
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="gender">Gender</Label>
+          <Select value={gender} onValueChange={(v) => setGender(v as Gender)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select gender..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Male">Male</SelectItem>
+              <SelectItem value="Female">Female</SelectItem>
+              <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dateOfBirth">Date of Birth</Label>
+          <Input
+            id="dateOfBirth"
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+            max={new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split("T")[0]}
+            min={new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split("T")[0]}
+          />
+        </div>
+      </div>
       <div className="space-y-2">
         <Label>Cities you can play in *</Label>
         <MultiCityCombobox
@@ -135,13 +170,44 @@ export function ProfileForm({ profile, isOnboarding = false }: ProfileFormProps)
           rows={3}
         />
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading
-          ? "Saving..."
-          : isOnboarding
-            ? "Complete Profile & Start"
-            : "Save Changes"}
-      </Button>
+      <div className="space-y-2">
+        <Label htmlFor="weightKg">
+          Weight{" "}
+          <span className="text-muted-foreground font-normal text-xs">(optional — used to estimate calories burned)</span>
+        </Label>
+        <div className="flex items-center gap-2 max-w-[160px]">
+          <Input
+            id="weightKg"
+            type="number"
+            min={30}
+            max={200}
+            value={weightKg}
+            onChange={(e) => setWeightKg(e.target.value)}
+            placeholder="e.g. 70"
+          />
+          <span className="text-sm text-muted-foreground shrink-0">kg</span>
+        </div>
+      </div>
+      <div className={!isOnboarding ? "grid grid-cols-2 gap-3" : ""}>
+        {!isOnboarding && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={loading}
+            onClick={() => router.back()}
+          >
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading
+            ? "Saving..."
+            : isOnboarding
+              ? "Complete Profile & Start"
+              : "Save Changes"}
+        </Button>
+      </div>
     </form>
   );
 }
